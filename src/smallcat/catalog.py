@@ -70,7 +70,7 @@ class EntryBase(BaseModel, ABC):
                 from airflow.hooks.base import BaseHook  # type: ignore[attr-defined,no-redef] # noqa: I001
             return BaseHook.get_connection(conn_id=self.connection)
         if isinstance(self.connection, SupportedConnectionSchemas):
-            return self.connection.model_dump()
+            return self.connection.model_dump(by_alias=True)
         return self.connection
 
     @abstractmethod
