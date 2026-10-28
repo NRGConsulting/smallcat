@@ -45,6 +45,27 @@ from smallcat.path_utils import norm_join_uri, to_relative_posix_path
 GCP_SERVICE_ACCOUNT_EXTRAS = ("keyfile_dict", "keyfile", "key_path")
 
 
+def ensure_extension(con: duckdb.DuckDBPyConnection, name: str) -> None:
+    """Load a DuckDB extension, installing it only if it is not available.
+
+    DuckDB downloads an extension on `INSTALL` and caches it, so trying to load
+    it first avoids a network round trip on every new connection and lets
+    already-installed extensions work offline.
+
+    Args:
+      con: The DuckDB connection to load the extension into.
+      name: Extension name, e.g. ``"httpfs"`` or ``"excel"``.
+
+    Raises:
+      duckdb.Error: If the extension is neither installed nor downloadable.
+    """
+    try:
+        con.load_extension(name)
+    except duckdb.Error:
+        con.install_extension(name)
+        con.load_extension(name)
+
+
 def sql_string_literal(value: str) -> str:
     """Quote ``value`` as a SQL string literal (doubling single quotes)."""
     return "'" + value.replace("'", "''") + "'"
@@ -445,11 +466,25 @@ class BaseDataset(ABC, Generic[L, S]):
         # Unknown type: try an explicit base_uri if provided
         return x.get("base_uri")
 
+    def _needs_httpfs(self) -> bool:
+        """Return True if DuckDB needs `httpfs` to reach this dataset's storage.
+
+        True for Google connections (the GCS secret is provided by `httpfs`) and
+        for any base URI with a scheme other than ``file://`` (``gs://``,
+        ``s3://``, ``https://``...). Local paths do not need it.
+        """
+        if (self.conn.conn_type or "").lower() in {"google_cloud_platform", "google"}:
+            return True
+        scheme = re.match(r"^([a-zA-Z][a-zA-Z0-9+.-]*)://", self.base_uri or "")
+        return scheme is not None and scheme.group(1).lower() != "file"
+
     def _duckdb_conn(self) -> duckdb.DuckDBPyConnection:
         """Create and configure a fresh DuckDB connection.
 
-        The connection installs and loads common extensions (`httpfs`, `json`,
-        `parquet`). For GCP-like connections, it also configures a GCS secret.
+        The connection loads the `json` and `parquet` extensions. `httpfs` is
+        loaded only for remote storage (see :meth:`_needs_httpfs`), so local
+        files work without network access. For GCP-like connections, it also
+        configures a GCS secret.
 
         Returns:
           A new, isolated `duckdb.DuckDBPyConnection` instance.
@@ -459,11 +494,10 @@ class BaseDataset(ABC, Generic[L, S]):
           interference.
         """
         con = duckdb.connect()
-        # Common extensions
-        con.install_extension("httpfs")
         con.load_extension("json")
         con.load_extension("parquet")
-        con.load_extension("httpfs")
+        if self._needs_httpfs():
+            ensure_extension(con, "httpfs")
 
         ctype = (self.conn.conn_type or "").lower()
         if ctype in {"google_cloud_platform", "google"}:
