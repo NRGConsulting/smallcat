@@ -3,7 +3,7 @@ name = "smallcat"
 dynamic = ["version"]
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "deltalake>=0.15",
     "duckdb>=1.4.1",
@@ -19,7 +19,6 @@ dependencies = [
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
 ]
@@ -76,11 +75,12 @@ line-ending = "lf"
 
 [dependency-groups]
 airflow = [
-    "apache-airflow>=2.10.0",
+    "apache-airflow>=3.3.0",
 ]
 dev = [
     "mypy>=1.18.2",
     "ruff>=0.14.0",
+    "pip-audit>=2.10.1",
 ]
 docs = [
     "griffe-pydantic>=1.1.8",
