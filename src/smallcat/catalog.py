@@ -13,6 +13,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field
 
+from smallcat._airflow import get_base_hook
 from smallcat.connections import ConnectionProtocol, SupportedConnectionSchemas
 from smallcat.datasets.base_dataset import BaseDataset
 from smallcat.datasets.csv_dataset import CSVDataset, CSVLoadOptions, CSVSaveOptions
@@ -64,11 +65,11 @@ class EntryBase(BaseModel, ABC):
             usable by datasets.
         """
         if isinstance(self.connection, str):
-            try:
-                from airflow.sdk import BaseHook
-            except ImportError:
-                from airflow.hooks.base import BaseHook  # type: ignore[attr-defined,no-redef] # noqa: I001
-            return BaseHook.get_connection(conn_id=self.connection)
+            base_hook = get_base_hook()
+            if base_hook is None:
+                msg = "Airflow is required to resolve a connection by its ID."
+                raise ImportError(msg)
+            return base_hook.get_connection(conn_id=self.connection)
         if isinstance(self.connection, SupportedConnectionSchemas):
             return self.connection.model_dump(by_alias=True)
         return self.connection
