@@ -14,7 +14,7 @@ def main() -> None:
     schema = Catalog.model_json_schema()
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     schema["$id"] = (
-        "https://raw.githubusercontent.com/DeepKernelLabs/smallcat/main/schemas/catalog.schema.json"
+        "https://raw.githubusercontent.com/NRGConsulting/smallcat/main/schemas/catalog.schema.json"
     )
     output_path = Path(__file__).parent.parent / "schemas/catalog.schema.json"
 
