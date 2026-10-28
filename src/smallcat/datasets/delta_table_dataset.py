@@ -24,6 +24,7 @@ Notes:
   Credentials are never exported to the process environment.
 """
 
+import inspect
 import json
 from enum import StrEnum
 
@@ -37,6 +38,11 @@ DATABRICKS_UNSUPPORTED_MSG = (
     "Databricks-hosted Delta tables are not supported yet: "
     "use a filesystem or Google Cloud Storage connection."
 )
+
+# Older `deltalake` releases take an `engine` argument in `write_deltalake`;
+# newer ones removed it. Decide once, up front, instead of retrying a failed
+# write (which could duplicate data with `mode="append"`).
+_WRITE_DELTALAKE_HAS_ENGINE = "engine" in inspect.signature(write_deltalake).parameters
 
 
 class DeltaTableLoadOptions(BaseModel):
@@ -181,6 +187,10 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
             dataset's base URI).
           table: The `pyarrow.Table` to write.
 
+        Notes:
+          The write is attempted exactly once; errors from `write_deltalake`
+          (including `TypeError`) propagate unchanged.
+
         Raises:
           NotImplementedError: If the connection type is ``databricks``.
         """
@@ -188,25 +198,17 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
             raise NotImplementedError(DATABRICKS_UNSUPPORTED_MSG)
         table_uri = self._full_uri(path)
         storage_options = self._delta_storage_options()
-        try:
-            engine = (
+        write_kwargs = self.save_options_dict()
+        if _WRITE_DELTALAKE_HAS_ENGINE:
+            write_kwargs["engine"] = (
                 "rust"
                 if self.save_options is not None
                 and self.save_options.schema_mode == SchemaMode.MERGE
                 else "pyarrow"
             )
-            write_deltalake(
-                table_or_uri=table_uri,
-                data=table,
-                storage_options=storage_options,
-                engine=engine,
-                **self.save_options_dict(),
-            )
-        except TypeError:
-            # Newer versions use the rust engine and don't take the engine parameter
-            write_deltalake(
-                table_or_uri=table_uri,
-                data=table,
-                storage_options=storage_options,
-                **self.save_options_dict(),
-            )
+        write_deltalake(
+            table_or_uri=table_uri,
+            data=table,
+            storage_options=storage_options,
+            **write_kwargs,
+        )
