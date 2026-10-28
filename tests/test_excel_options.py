@@ -25,7 +25,7 @@ def _read_sql(con, **load_options):
         load_options=ExcelLoadOptions(**load_options),
     )
     ds.load_arrow_record_batch_reader("in.xlsx")
-    return con.execute.call_args.args[0]
+    return con.sql.call_args.args[0]
 
 
 def _write_sql(con, **save_options):
@@ -46,7 +46,7 @@ def test_load_boolean_options_are_forwarded(con, option, value):
 
 def test_load_options_left_unset_are_not_forwarded(con):
     sql = _read_sql(con)
-    assert sql.count("read_xlsx(?)") == 1
+    assert sql == "SELECT * FROM read_xlsx(?)"
     for option in ("header", "all_varchar", "empty_as_varchar"):
         assert option not in sql
 
@@ -61,3 +61,22 @@ def test_save_options_left_unset_are_not_forwarded(con):
     sql = _write_sql(con)
     assert "HEADER" not in sql
     assert "FORMAT xlsx)" in sql
+
+
+def test_where_clause_is_not_rewritten(con):
+    """A literal that looks like `FROM data` must reach DuckDB untouched."""
+    where = "note = 'copied FROM data sheet' OR note LIKE '%from  data%'"
+    ds = ExcelDataset(conn={"conn_type": "fs", "extra": {}})
+    ds.load_arrow_record_batch_reader("in.xlsx", where=where)
+    view, query = con.sql.return_value.query.call_args.args
+    assert view == "data"
+    assert "FROM data" in query
+    assert "'copied FROM data sheet'" in query
+    assert "'%from  data%'" in query
+    assert "read_xlsx" not in query
+
+
+def test_file_uri_is_passed_as_a_parameter(con):
+    ds = ExcelDataset(conn={"conn_type": "fs", "extra": {}})
+    ds.load_arrow_record_batch_reader("in.xlsx")
+    assert con.sql.call_args.kwargs["params"] == ["in.xlsx"]
