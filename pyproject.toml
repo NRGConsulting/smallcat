@@ -40,9 +40,6 @@ docs = [
     "pymdown-extensions>=10.16.1",
 ]
 
-[project.scripts]
-smallcat = "smallcat:main"
-
 [build-system]
 requires = ["hatchling>=1.25", "hatch-vcs>=0.4"]
 build-backend = "hatchling.build"
