@@ -7,7 +7,14 @@ on:
       - "v*"
 
 jobs:
+  test:
+    # Never publish untested code: the release only runs if the CI passes.
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
   pypi:
+    needs: test
     runs-on: ubuntu-latest
     environment: pypi           # gates this job behind environment approval
     permissions:

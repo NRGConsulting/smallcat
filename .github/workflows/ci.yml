@@ -1,0 +1,42 @@
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_call:      # reused by publish.yml so a release only ships tested code
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0          # hatch-vcs derives the version from git tags
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        # `pip install --group` (PEP 735) needs pip >= 25.1.
+        # `airflow` is needed by the catalog tests that resolve Airflow Variables/Connections.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . --group dev --group airflow
+
+      - name: Run tests
+        run: python -m pytest -q
