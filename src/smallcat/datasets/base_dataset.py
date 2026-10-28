@@ -23,6 +23,7 @@ Dependencies:
   duckdb, pyarrow, pandas, pydantic, and Smallcat connection utilities.
 """
 
+import json
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -44,6 +45,50 @@ except ImportError:
         from airflow.hooks.base import BaseHook  # type: ignore[attr-defined,no-redef]
     except ImportError:
         BaseHook = None  # type: ignore[assignment,misc]
+
+
+def sql_string_literal(value: str) -> str:
+    """Quote ``value`` as a SQL string literal (doubling single quotes)."""
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _is_plain_filter(ast: dict) -> bool:
+    """Return True if the AST is ``SELECT * FROM data WHERE ...`` and nothing else.
+
+    A predicate such as ``1) UNION SELECT ... WHERE (1`` keeps the parentheses
+    balanced, so the parsed statement must be checked to still be a bare
+    filtered select: no set operations, grouping, ordering or limits.
+    """
+    try:
+        node = ast["statements"][0]["node"]
+    except (KeyError, IndexError, TypeError):
+        return False
+    table = node.get("from_table") or {}
+    return (
+        len(ast["statements"]) == 1
+        and node.get("type") == "SELECT_NODE"
+        and table.get("type") == "BASE_TABLE"
+        and table.get("table_name") == "data"
+        and not node.get("modifiers")
+        and not node.get("group_expressions")
+        and not node.get("group_sets")
+        and node.get("having") is None
+        and node.get("qualify") is None
+        and node.get("sample") is None
+        and not node.get("cte_map", {}).get("map")
+    )
+
+
+def _contains_subquery(node: object) -> bool:
+    """Return True if a ``json_serialize_sql`` AST contains a subquery."""
+    if isinstance(node, dict):
+        if node.get("type") == "SUBQUERY" or node.get("class") == "SUBQUERY":
+            return True
+        return any(_contains_subquery(v) for v in node.values())
+    if isinstance(node, list):
+        return any(_contains_subquery(v) for v in node)
+    return False
+
 
 L = TypeVar("L", bound=BaseModel)  # Load options model
 S = TypeVar("S", bound=BaseModel)  # Save options model
@@ -302,13 +347,35 @@ class BaseDataset(ABC, Generic[L, S]):
         return ", ".join(columns)
 
     def _validated_where(self, where: str | None) -> str | None:
-        """Lightweight guard against obvious SQL injection in WHERE clauses."""
+        """Validate a WHERE predicate by parsing it with DuckDB.
+
+        The predicate is parsed as part of ``SELECT * FROM data WHERE (...)``
+        and the resulting AST is inspected. It must be a single, syntactically
+        valid expression (so ``;`` and unbalanced comments are rejected by the
+        parser itself, while string literals such as ``'a--b'`` are fine) and
+        it must not contain subqueries, which are the way to reach table
+        functions such as ``read_text`` or other tables. The statement must
+        remain a bare ``SELECT * FROM data WHERE ...``, so predicates that
+        close the parenthesis to append ``UNION``, ``LIMIT``, ``GROUP BY``,
+        etc. are rejected.
+
+        Raises:
+          ValueError: If the predicate does not parse, contains a subquery or
+            alters the shape of the query.
+        """
         if not where:
             return None
 
-        disallowed = [";", "--", "/*", "*/"]
-        if any(token in where for token in disallowed):
-            msg = "Unsafe characters found in WHERE clause"
+        probe = f"SELECT * FROM data WHERE ({where})"  # noqa: S608  (parsed, never run)
+        with duckdb.connect() as con:
+            try:
+                raw = con.execute("SELECT json_serialize_sql(?)", [probe]).fetchone()
+            except duckdb.Error as exc:
+                msg = "Unsafe or invalid WHERE clause"
+                raise ValueError(msg) from exc
+        ast = json.loads(raw[0]) if raw else {"error": True}
+        if ast.get("error") or not _is_plain_filter(ast) or _contains_subquery(ast):
+            msg = "Unsafe or invalid WHERE clause"
             raise ValueError(msg)
         return where
 
@@ -332,7 +399,7 @@ class BaseDataset(ABC, Generic[L, S]):
 
         stmt = select(*cols).select_from(tbl)
         if where:
-            stmt = stmt.where(text(where))
+            stmt = stmt.where(text(f"({where})"))
         return stmt.compile(compile_kwargs={"literal_binds": True}).string
 
     def _infer_base_uri(self) -> str | None:  # noqa: PLR0911
@@ -427,8 +494,8 @@ class BaseDataset(ABC, Generic[L, S]):
                 f"""
               CREATE OR REPLACE SECRET (
                   TYPE gcs,
-                  KEY_ID '{self.conn.login}',
-                  SECRET '{self.conn.password}'
+                  KEY_ID {sql_string_literal(self.conn.login)},
+                  SECRET {sql_string_literal(self.conn.password)}
               );
               """,
             )
