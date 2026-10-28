@@ -51,13 +51,6 @@ theme:
   logo: 'assets/images/smallcat-logo-square.png'
   favicon: 'assets/images/smallcat-logo-square.png'
 extra:
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/DeepKernelLabs
-      name: DKL on Github
-    - icon: fontawesome/brands/linkedin
-      link: https://www.linkedin.com/company/deep-kernel-labs
-      name: DKL on Linkedin
   generator: false
 validation:
   omitted_files: warn
