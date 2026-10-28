@@ -24,7 +24,11 @@ import re
 import pyarrow as pa
 from pydantic import BaseModel, Field
 
-from smallcat.datasets.base_dataset import BaseDataset, sql_string_literal
+from smallcat.datasets.base_dataset import (
+    BaseDataset,
+    ensure_extension,
+    sql_string_literal,
+)
 
 
 class ExcelLoadOptions(BaseModel):
@@ -77,8 +81,7 @@ class ExcelDataset(BaseDataset[ExcelLoadOptions, ExcelSaveOptions]):
         full_uri = self._full_uri(path)
         query = self._build_query("data", columns, where)
         with self._duckdb_conn() as con:
-            con.install_extension("excel")
-            con.load_extension("excel")
+            ensure_extension(con, "excel")
             lo = self.load_options_dict()
             args_sql = ""
             if (header := lo.get("header")) is not None:
@@ -112,8 +115,7 @@ class ExcelDataset(BaseDataset[ExcelLoadOptions, ExcelSaveOptions]):
         """
         full_uri = self._full_uri(path)
         with self._duckdb_conn() as con:
-            con.install_extension("excel")
-            con.load_extension("excel")
+            ensure_extension(con, "excel")
             lo = self.save_options_dict()
             args_sql = ""
             if (header := lo.get("header")) is not None:
