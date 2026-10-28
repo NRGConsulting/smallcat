@@ -407,8 +407,9 @@ class BaseDataset(ABC, Generic[L, S]):
 
         Rules:
           * `fs`: use `extras.base_uri`; otherwise derive from
-            `extras.base_path` (normalized to `file://`). Defaults to
-            `file://` (current working directory) if neither is provided.
+            `extras.base_path` (normalized to `file://`). If neither is provided
+            returns `None`, so paths are resolved relative to the current
+            working directory.
           * `google_cloud_platform` / `google`: use `extras.base_uri`; otherwise
             derive from `gs://{bucket}` and optional `prefix`.
           * Other/unknown types: fall back to `extras.base_uri` if present.
@@ -429,7 +430,8 @@ class BaseDataset(ABC, Generic[L, S]):
                 if re.match(r"^[a-zA-Z0-9+.-]+://", base_path):
                     return base_path
                 return f"file://{base_path}"
-            return "file://"  # local current-dir root by default
+            # No base: paths stay relative to the current working directory.
+            return None
 
         if ctype in {"google_cloud_platform", "google"}:
             if x.get("base_uri"):

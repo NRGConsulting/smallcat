@@ -15,7 +15,8 @@ def norm_join_uri(base_uri: str, rel: str) -> str:
     Preserves the original scheme (e.g., `file://`, `gs://`), removes
     duplicate slashes, and trims trailing slashes from the base before joining.
     If `base_uri` does not include a scheme, it is treated as a local path
-    base.
+    base. A bare `file://` base has no location, so `rel` is returned as a
+    relative POSIX path (resolved against the current directory).
 
     Args:
         base_uri: Base URI or local path. Can include a scheme like
@@ -34,13 +35,20 @@ def norm_join_uri(base_uri: str, rel: str) -> str:
         >>> norm_join_uri("/var/data", "logs/2025-10-15")
         '/var/data/logs/2025-10-15'
     """
-    base_uri = base_uri.rstrip("/")
     m = re.match(r"^(?P<scheme>[a-zA-Z0-9+.-]+)://(?P<body>.*)$", base_uri)
     if not m:
         # Treat as local path base (no scheme present).
-        return posixpath.join(base_uri, rel.lstrip("/"))
+        return posixpath.join(base_uri.rstrip("/"), rel.lstrip("/"))
     scheme, body = m.group("scheme"), m.group("body")
-    joined = posixpath.join(body, rel.lstrip("/"))
+    if body == "" and scheme == "file":
+        # A bare `file://` carries no location. Joining would make the first
+        # segment a host or turn the path into an absolute one, so return a
+        # relative path, resolved against the current directory.
+        return to_relative_posix_path(rel)
+    if body and not body.strip("/"):
+        # Root base such as `file:///`: keep the empty authority and the root.
+        return f"{scheme}:///{rel.lstrip('/')}"
+    joined = posixpath.join(body.rstrip("/"), rel.lstrip("/"))
     return f"{scheme}://{joined}"
 
 
