@@ -81,15 +81,15 @@ class ExcelDataset(BaseDataset[ExcelLoadOptions, ExcelSaveOptions]):
             con.load_extension("excel")
             lo = self.load_options_dict()
             args_sql = ""
-            if header := lo.get("header"):
+            if (header := lo.get("header")) is not None:
                 args_sql += f", header = {str(header).lower()}"
             if sheet := lo.get("sheet"):
                 args_sql += f", sheet = {sql_string_literal(sheet)}"
             if _range := lo.get("range"):
                 args_sql += f", range = {sql_string_literal(_range)}"
-            if all_varchar := lo.get("all_varchar"):
+            if (all_varchar := lo.get("all_varchar")) is not None:
                 args_sql += f", all_varchar = {str(all_varchar).lower()}"
-            if empty_as_varchar := lo.get("empty_as_varchar"):
+            if (empty_as_varchar := lo.get("empty_as_varchar")) is not None:
                 args_sql += f", empty_as_varchar = {str(empty_as_varchar).lower()}"
             sql = re.sub(
                 r"FROM\s+data",
@@ -116,7 +116,7 @@ class ExcelDataset(BaseDataset[ExcelLoadOptions, ExcelSaveOptions]):
             con.load_extension("excel")
             lo = self.save_options_dict()
             args_sql = ""
-            if header := lo.get("header"):
+            if (header := lo.get("header")) is not None:
                 args_sql += f", HEADER {str(header).lower()}"
             if sheet := lo.get("sheet"):
                 args_sql += f", SHEET {sql_string_literal(sheet)}"
