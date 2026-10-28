@@ -26,6 +26,7 @@ Notes:
 
 import inspect
 import json
+import warnings
 from enum import StrEnum
 
 import pyarrow as pa
@@ -113,7 +114,7 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
 
         The options are derived from the active connection:
           * `fs` (local): returns `{}`.
-          * `google_cloud_platform`: uses one of:
+          * `google_cloud_platform` / `google`: uses one of:
               - `extras.keyfile_dict` (dict or JSON string)
               - `extras.keyfile` (raw JSON string)
               - `extras.key_path` (path on worker)
@@ -125,10 +126,18 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
             * `google_service_account_key` (serialized JSON)
             * `google_service_account` (path to keyfile)
 
+        Warns:
+          UserWarning: If a Google connection only has HMAC keys (`login` /
+            `password`), which delta-rs does not support.
+
         Raises:
           ValueError: If the connection type is not supported.
         """
-        if self.conn.conn_type not in ["fs", "google_cloud_platform"]:
+        if (self.conn.conn_type or "").lower() not in {
+            "fs",
+            "google_cloud_platform",
+            "google",
+        }:
             msg = f"Storage options not implemented for type {self.conn.conn_type}"
             raise ValueError(
                 msg,
@@ -154,6 +163,14 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
         if x.get("key_path"):  # path on worker
             return {"google_service_account": x["key_path"]}
 
+        if self.conn.login and self.conn.password and self.conn.conn_type != "fs":
+            warnings.warn(
+                "Delta tables cannot use HMAC keys (login/password) for Google "
+                "Cloud Storage: provide a service account in keyfile_dict, "
+                "keyfile or key_path. Accessing without credentials.",
+                UserWarning,
+                stacklevel=2,
+            )
         return {}
 
     def load_arrow_record_batch_reader(

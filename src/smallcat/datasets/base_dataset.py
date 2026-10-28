@@ -25,6 +25,7 @@ Dependencies:
 
 import json
 import re
+import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Generic, TypeVar
@@ -45,6 +46,10 @@ except ImportError:
         from airflow.hooks.base import BaseHook  # type: ignore[attr-defined,no-redef]
     except ImportError:
         BaseHook = None  # type: ignore[assignment,misc]
+
+
+# Connection extras that carry Google service account credentials.
+GCP_SERVICE_ACCOUNT_EXTRAS = ("keyfile_dict", "keyfile", "key_path")
 
 
 def sql_string_literal(value: str) -> str:
@@ -475,29 +480,39 @@ class BaseDataset(ABC, Generic[L, S]):
     # ---------- Backend configuration ----------
 
     def _configure_gcp_secret(self, con: duckdb.DuckDBPyConnection) -> None:
-        """Create a DuckDB GCS secret from the Airflow GCP connection.
+        """Create a DuckDB GCS secret from the connection's HMAC keys.
 
-        Supports any of the following credential sources in `extras`:
-          * `keyfile_dict` (JSON dict)
-          * `keyfile` (raw JSON string)
-          * `key_path` (filesystem path on the worker)
-
-        The method currently uses `login` as the key ID and `password` as
-        the secret value, matching Airflow GCP connection conventions.
+        DuckDB authenticates ``gs://`` paths through the S3-compatible API,
+        which only accepts **HMAC keys**: `login` is used as the key ID and
+        `password` as the secret. Service account credentials (`keyfile_dict`,
+        `keyfile`, `key_path` in `extras`) are understood by delta-rs only, so
+        they cannot authenticate CSV, Parquet or Excel datasets. If they are
+        present without HMAC keys, a warning is emitted instead of silently
+        reading anonymously.
 
         Args:
           con: An open DuckDB connection to configure.
 
-        Returns:
-          None
+        Warns:
+          UserWarning: If only service account credentials are configured.
         """
-        if self.conn.login and self.conn.password:
-            con.execute(
-                f"""
-              CREATE OR REPLACE SECRET (
-                  TYPE gcs,
-                  KEY_ID {sql_string_literal(self.conn.login)},
-                  SECRET {sql_string_literal(self.conn.password)}
-              );
-              """,
-            )
+        if not (self.conn.login and self.conn.password):
+            if any(self.extras.get(key) for key in GCP_SERVICE_ACCOUNT_EXTRAS):
+                warnings.warn(
+                    "DuckDB-based datasets (CSV, Parquet, Excel) cannot use Google "
+                    "service account credentials (keyfile_dict/keyfile/key_path): "
+                    "they need HMAC keys in the connection's login/password. "
+                    "Accessing gs:// paths anonymously.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            return
+        con.execute(
+            f"""
+          CREATE OR REPLACE SECRET (
+              TYPE gcs,
+              KEY_ID {sql_string_literal(self.conn.login)},
+              SECRET {sql_string_literal(self.conn.password)}
+          );
+          """,
+        )
