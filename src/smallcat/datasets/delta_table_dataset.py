@@ -8,7 +8,7 @@ Storage backends:
   * Local filesystem (`fs`) - no extra options.
   * Google Cloud Storage (`google_cloud_platform`) - credentials derived from
     connection extras: `keyfile_dict` / `keyfile` / `key_path`.
-  * Databricks - minimal env vars exported (workspace URL and token).
+  * Databricks - not supported; raises ``NotImplementedError``.
 
 Example:
   >>> ds = DeltaTableDataset.from_conn_id("gcs_delta")
@@ -20,12 +20,11 @@ Options:
   * `DeltaTableSaveOptions`: mode, partition_by, schema_mode.
 
 Notes:
-  For Databricks, this module sets:
-  `DATABRICKS_WORKSPACE_URL` and `DATABRICKS_ACCESS_TOKEN` before access.
+  Databricks connections are rejected explicitly on both read and write.
+  Credentials are never exported to the process environment.
 """
 
 import json
-import os
 from enum import StrEnum
 
 import pyarrow as pa
@@ -33,6 +32,11 @@ from deltalake import DeltaTable, write_deltalake
 from pydantic import BaseModel, Field
 
 from smallcat.datasets.base_dataset import BaseDataset
+
+DATABRICKS_UNSUPPORTED_MSG = (
+    "Databricks-hosted Delta tables are not supported yet: "
+    "use a filesystem or Google Cloud Storage connection."
+)
 
 
 class DeltaTableLoadOptions(BaseModel):
@@ -94,8 +98,8 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
     Notes:
       * For Google Cloud Storage, credentials are derived from the connection's
         extras (e.g., `keyfile_dict`, `keyfile`, or `key_path`).
-      * For `conn_type == "databricks"`, environment variables are set to
-        support Databricks-hosted Delta.
+      * `conn_type == "databricks"` is not supported and raises
+        ``NotImplementedError`` on both read and write.
     """
 
     def _delta_storage_options(self) -> dict:
@@ -146,22 +150,6 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
 
         return {}
 
-    def _set_databricks_acces_variables(self) -> None:
-        """Export minimal environment variables for Databricks-hosted Delta.
-
-        Sets:
-          * `DATABRICKS_WORKSPACE_URL` from `self.conn.host`
-          * `DATABRICKS_ACCESS_TOKEN` from `self.conn.password`
-
-        Notes:
-          These variables are used by delta-rs when accessing Databricks.
-        """
-        if self.conn.host is None or self.conn.password is None:
-            msg = "Databricks connection requires both host and password."
-            raise ValueError(msg)
-        os.environ["DATABRICKS_WORKSPACE_URL"] = self.conn.host
-        os.environ["DATABRICKS_ACCESS_TOKEN"] = self.conn.password
-
     def load_arrow_record_batch_reader(
         self,
         path: str,
@@ -171,8 +159,7 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
         """Stream Delta Lake rows via DuckDB with an optional filter."""
         full_uri = self._full_uri(path)
         if self.conn.conn_type == "databricks":
-            self._set_databricks_acces_variables()
-            raise NotImplementedError
+            raise NotImplementedError(DATABRICKS_UNSUPPORTED_MSG)
 
         query = self._build_query("data", columns, where)
         storage_options = self._delta_storage_options()
@@ -194,36 +181,32 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
             dataset's base URI).
           table: The `pyarrow.Table` to write.
 
-        Notes:
-          * If `conn_type == "databricks"`, this method sets Databricks
-            environment variables via `_set_databricks_acces_variables`.
-            (The write is otherwise handled by delta-rs for non-Databricks.)
+        Raises:
+          NotImplementedError: If the connection type is ``databricks``.
         """
-        """True Delta write using delta-rs."""
-        table_uri = self._full_uri(path)
         if self.conn.conn_type == "databricks":
-            self._set_databricks_acces_variables()
-        else:
-            storage_options = self._delta_storage_options()
-            try:
-                engine = (
-                    "rust"
-                    if self.save_options is not None
-                    and self.save_options.schema_mode == SchemaMode.MERGE
-                    else "pyarrow"
-                )
-                write_deltalake(
-                    table_or_uri=table_uri,
-                    data=table,
-                    storage_options=storage_options,
-                    engine=engine,
-                    **self.save_options_dict(),
-                )
-            except TypeError:
-                # Newer versions use the rust engine and don't take the engine parameter
-                write_deltalake(
-                    table_or_uri=table_uri,
-                    data=table,
-                    storage_options=storage_options,
-                    **self.save_options_dict(),
-                )
+            raise NotImplementedError(DATABRICKS_UNSUPPORTED_MSG)
+        table_uri = self._full_uri(path)
+        storage_options = self._delta_storage_options()
+        try:
+            engine = (
+                "rust"
+                if self.save_options is not None
+                and self.save_options.schema_mode == SchemaMode.MERGE
+                else "pyarrow"
+            )
+            write_deltalake(
+                table_or_uri=table_uri,
+                data=table,
+                storage_options=storage_options,
+                engine=engine,
+                **self.save_options_dict(),
+            )
+        except TypeError:
+            # Newer versions use the rust engine and don't take the engine parameter
+            write_deltalake(
+                table_or_uri=table_uri,
+                data=table,
+                storage_options=storage_options,
+                **self.save_options_dict(),
+            )
