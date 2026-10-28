@@ -1,8 +1,9 @@
 site_name: Smallcat
 site_description: A small, modular data catalog.
+site_url: https://nrgconsulting.github.io/smallcat/
 strict: true
-repo_name: DeepKernelLabs/smallcat
-repo_url: https://github.com/DeepKernelLabs/smallcat
+repo_name: NRGConsulting/smallcat
+repo_url: https://github.com/NRGConsulting/smallcat
 theme:
   name: material
   palette:
@@ -48,7 +49,7 @@ theme:
   icon:
     repo: fontawesome/brands/github
   logo: 'assets/images/smallcat-logo-square.png'
-  favicon: 'img/favicon.ico'
+  favicon: 'assets/images/smallcat-logo-square.png'
 extra:
   social:
     - icon: fontawesome/brands/github
