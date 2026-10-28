@@ -8,11 +8,11 @@
 <p align="center">
   <a href="https://pypi.org/project/smallcat/"><img src="https://img.shields.io/pypi/v/smallcat.svg" alt="PyPI"></a>
   <a href="https://pypi.org/project/smallcat/"><img src="https://img.shields.io/pypi/pyversions/smallcat.svg" alt="Python versions"></a>
-  <a href="https://github.com/DeepKernelLabs/smallcat/actions"><img src="https://img.shields.io/github/actions/workflow/status/DeepKernelLabs/smallcat/publish.yml?label=CI" alt="CI"></a>
-  <a href="https://codecov.io/gh/DeepKernelLabs/smallcat"><img src="https://img.shields.io/codecov/c/github/DeepKernelLabs/smallcat" alt="coverage"></a>
-  <a href="https://github.com/DeepKernelLabs/smallcat/blob/main/LICENSE"><img src="https://img.shields.io/github/license/DeepKernelLabs/smallcat.svg" alt="license"></a>
+  <a href="https://github.com/NRGConsulting/smallcat/actions"><img src="https://img.shields.io/github/actions/workflow/status/NRGConsulting/smallcat/publish.yml?label=CI" alt="CI"></a>
+  <a href="https://codecov.io/gh/NRGConsulting/smallcat"><img src="https://img.shields.io/codecov/c/github/NRGConsulting/smallcat" alt="coverage"></a>
+  <a href="https://github.com/NRGConsulting/smallcat/blob/main/LICENSE"><img src="https://img.shields.io/github/license/NRGConsulting/smallcat.svg" alt="license"></a>
   <a href="https://pepy.tech/project/smallcat"><img src="https://static.pepy.tech/badge/smallcat" alt="downloads"></a>
-  <a href="https://DeepKernelLabs.github.io/smallcat/"><img src="https://img.shields.io/badge/docs-mkdocs%20material-blue" alt="docs"></a>
+  <a href="https://nrgconsulting.github.io/smallcat/"><img src="https://img.shields.io/badge/docs-mkdocs%20material-blue" alt="docs"></a>
 </p>
 
 ## Install
@@ -81,4 +81,4 @@ df = catalog.load_pandas("bar")
 ```
 
 ## Docs
-Read more at [the official docs](https://deepkernellabs.github.io/smallcat/).
+Read more at [the official docs](https://nrgconsulting.github.io/smallcat/).

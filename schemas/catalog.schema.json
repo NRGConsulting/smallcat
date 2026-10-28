@@ -930,5 +930,5 @@
   "title": "Catalog",
   "type": "object",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/DeepKernelLabs/smallcat/main/schemas/catalog.schema.json"
+  "$id": "https://raw.githubusercontent.com/NRGConsulting/smallcat/main/schemas/catalog.schema.json"
 }

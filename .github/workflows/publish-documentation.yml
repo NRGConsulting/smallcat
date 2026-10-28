@@ -4,14 +4,18 @@ on:
   push:
     branches:
       - main
-      - docs/*    # Use docs/ branches to test this CI pipeline
+  workflow_dispatch:      # manual run; the job below still only deploys from main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   deploy:
+    # `mkdocs gh-deploy --force` overwrites the public site: only main may do it.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write     # needed to push to the gh-pages branch
     steps:
       - uses: actions/checkout@v4
       - name: Configure Git Credentials

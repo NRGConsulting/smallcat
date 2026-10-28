@@ -18,7 +18,7 @@ uv add smallcat
 Create a file named `catalog.yaml` with the following contents.
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/DeepKernelLabs/smallcat/refs/heads/main/schemas/catalog.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/NRGConsulting/smallcat/refs/heads/main/schemas/catalog.schema.json
 entries:
   foo:
     file_format: csv
