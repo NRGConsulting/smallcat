@@ -19,8 +19,6 @@ Options:
   * `ExcelSaveOptions`: header, sheet.
 """
 
-import re
-
 import pyarrow as pa
 from pydantic import BaseModel, Field
 
@@ -91,13 +89,12 @@ class ExcelDataset(BaseDataset[ExcelLoadOptions, ExcelSaveOptions]):
                 args_sql += f", all_varchar = {str(all_varchar).lower()}"
             if (empty_as_varchar := lo.get("empty_as_varchar")) is not None:
                 args_sql += f", empty_as_varchar = {str(empty_as_varchar).lower()}"
-            sql = re.sub(
-                r"FROM\s+data",
-                lambda _: f"from read_xlsx(?{args_sql})",
-                query,
-                flags=re.IGNORECASE,
-            )
-            return con.execute(sql, [full_uri]).fetch_record_batch()
+            # Expose the sheet as the relation `data` and run the query on it,
+            # instead of rewriting `FROM data` in the SQL text (which also
+            # rewrote string literals in the user's WHERE clause).
+            sql = f"SELECT * FROM read_xlsx(?{args_sql})"  # noqa: S608  (options are booleans or escaped literals)
+            rel = con.sql(sql, params=[full_uri])
+            return rel.query("data", query).fetch_record_batch()
 
     def save_arrow_table(self, path: str, table: pa.Table) -> None:
         """Write a PyArrow table to an .xlsx file.
