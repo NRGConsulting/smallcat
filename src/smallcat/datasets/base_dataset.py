@@ -35,16 +35,9 @@ import pyarrow as pa
 from pydantic import BaseModel
 from sqlalchemy import MetaData, Table, literal_column, select, text
 
+from smallcat._airflow import get_base_hook
 from smallcat.connections import ConnectionLike, ConnectionProtocol
 from smallcat.path_utils import norm_join_uri, to_relative_posix_path
-
-try:
-    from airflow.sdk.bases.hook import BaseHook  # type: ignore[attr-defined]
-except ImportError:
-    try:
-        from airflow.hooks.base import BaseHook  # type: ignore[attr-defined,no-redef]
-    except ImportError:
-        BaseHook = None  # type: ignore[assignment,misc]
 
 
 def sql_string_literal(value: str) -> str:
@@ -177,10 +170,11 @@ class BaseDataset(ABC, Generic[L, S]):
         Returns:
           A fully constructed `BaseDataset` subclass instance.
         """
-        if BaseHook is None:
+        base_hook = get_base_hook()
+        if base_hook is None:
             raise RuntimeError("Airflow not available. Install smallcat[airflow]")  # noqa: TRY003, EM101
 
-        conn = BaseHook.get_connection(conn_id)
+        conn = base_hook.get_connection(conn_id)
         return cls(conn=conn, load_options=load_options, save_options=save_options)
 
     # ---------- Public API ----------
