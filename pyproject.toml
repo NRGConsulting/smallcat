@@ -3,7 +3,7 @@ name = "smallcat"
 dynamic = ["version"]
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,!=3.15"
 dependencies = [
     "deltalake>=0.15",
     "duckdb>=1.4.1",
@@ -11,7 +11,6 @@ dependencies = [
     "pandas-stubs>=2.3.2.250926",
     "pyarrow>=16.0.0",
     "pydantic>=2.12.2",
-    "pytest>=8.4.2",
     "sqlalchemy>=1.4.49",
     "pyyaml>=6.0.3",
     "types-pyyaml>=6.0.12.20250915",
@@ -21,6 +20,24 @@ classifiers = [
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+]
+
+[dependency-groups]
+airflow = [
+    "apache-airflow>=3.3.0",
+]
+dev = [
+    "mypy>=1.18.2",
+    "ruff>=0.14.0",
+    "pip-audit>=2.10.1",
+    "pytest>=8.4.2",
+]
+docs = [
+    "griffe-pydantic>=1.1.8",
+    "mkdocs-include-markdown-plugin>=7.2.0",
+    "mkdocs-material>=9.6.22",
+    "mkdocstrings[python]>=0.30.1",
+    "pymdown-extensions>=10.16.1",
 ]
 
 [project.scripts]
@@ -72,23 +89,6 @@ convention = "google"
 docstring-code-format = true
 indent-style = "space"
 line-ending = "lf"
-
-[dependency-groups]
-airflow = [
-    "apache-airflow>=3.3.0",
-]
-dev = [
-    "mypy>=1.18.2",
-    "ruff>=0.14.0",
-    "pip-audit>=2.10.1",
-]
-docs = [
-    "griffe-pydantic>=1.1.8",
-    "mkdocs-include-markdown-plugin>=7.2.0",
-    "mkdocs-material>=9.6.22",
-    "mkdocstrings[python]>=0.30.1",
-    "pymdown-extensions>=10.16.1",
-]
 
 [tool.mypy]
 ignore_missing_imports = false
