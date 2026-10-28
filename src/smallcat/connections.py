@@ -58,7 +58,7 @@ class ConnectionLike(ConnectionProtocol):
         - `schema` (optional)
         - `login` (optional)
         - `password` (optional)
-        - `extra` (optional; `str` JSON or `dict`)
+        - `extra` (optional; `str` JSON, `dict` or `None`)
 
     Notes:
         If `extra` is provided as a `dict`, it is serialized to JSON. If it
@@ -78,11 +78,13 @@ class ConnectionLike(ConnectionProtocol):
         self.login = connection.get("login")
         self.password = connection.get("password")
         extra = connection.get("extra")
-        if isinstance(extra, dict):
+        if extra is None or isinstance(extra, str):
+            self.extra = extra
+        elif isinstance(extra, dict):
             self.extra = json.dumps(extra)
         else:
-            assert isinstance(extra, str)
-            self.extra = extra
+            msg = f"`extra` must be a dict, a JSON string or None, got {type(extra)}"
+            raise TypeError(msg)
 
     @property
     def extra_dejson(self) -> dict:
