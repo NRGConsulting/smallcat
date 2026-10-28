@@ -40,7 +40,6 @@ from smallcat._airflow import get_base_hook
 from smallcat.connections import ConnectionLike, ConnectionProtocol
 from smallcat.path_utils import norm_join_uri, to_relative_posix_path
 
-
 # Connection extras that carry Google service account credentials.
 GCP_SERVICE_ACCOUNT_EXTRAS = ("keyfile_dict", "keyfile", "key_path")
 
