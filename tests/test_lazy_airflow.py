@@ -101,3 +101,18 @@ def test_entry_without_airflow_raises_import_error():
         pytest.raises(ImportError, match="Airflow is required"),
     ):
         entry.get_connection()
+
+
+def test_missing_airflow_errors_point_to_the_airflow_extra():
+    # The hint must name an install command that works (SC-018).
+    entry = CSVEntry(
+        connection="my_conn", location="x.csv", load_options=None, save_options=None,
+    )
+    with patch("smallcat.catalog.get_base_hook", return_value=None):
+        with pytest.raises(ImportError) as from_entry:
+            entry.get_connection()
+    with patch("smallcat.datasets.base_dataset.get_base_hook", return_value=None):
+        with pytest.raises(RuntimeError) as from_conn_id:
+            CSVDataset.from_conn_id("my_conn")
+    for exc in (from_entry, from_conn_id):
+        assert "pip install smallcat[airflow]" in str(exc.value)
