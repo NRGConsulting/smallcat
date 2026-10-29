@@ -59,6 +59,7 @@ validation:
 nav:
   - Get Started:
     - About: index.md
+    - Catalog reference: catalog-reference.md
     # - Changelog: changelog.md
   - Examples:
     - Standalone: examples/standalone.md
