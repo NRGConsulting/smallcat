@@ -4,18 +4,16 @@ Use Smallcat with Airflow. In this example we'll work locally by reading connect
 ## Setup
 ### Install smallcat
 
-You can install smallcat with airflow dependencies.
+Airflow is an optional dependency of smallcat, available as the `airflow` extra.
 
 ```sh
-pip install smallcat
-pip install apache-airflow
+pip install "smallcat[airflow]"
 ```
 
 or
 
 ```sh
-uv add smallcat
-uv add apache-airflow
+uv add "smallcat[airflow]"
 ```
 
 ### Point Airflow to local secrets files

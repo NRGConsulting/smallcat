@@ -36,7 +36,7 @@ import pyarrow as pa
 from pydantic import BaseModel
 from sqlalchemy import MetaData, Table, literal_column, select, text
 
-from smallcat._airflow import get_base_hook
+from smallcat._airflow import AIRFLOW_INSTALL_HINT, get_base_hook
 from smallcat.connections import ConnectionLike, ConnectionProtocol
 from smallcat.path_utils import norm_join_uri, to_relative_posix_path
 
@@ -197,7 +197,8 @@ class BaseDataset(ABC, Generic[L, S]):
         """
         base_hook = get_base_hook()
         if base_hook is None:
-            raise RuntimeError("Airflow not available. Install smallcat[airflow]")  # noqa: TRY003, EM101
+            msg = f"Airflow not available. {AIRFLOW_INSTALL_HINT}"
+            raise RuntimeError(msg)
 
         conn = base_hook.get_connection(conn_id)
         return cls(conn=conn, load_options=load_options, save_options=save_options)
