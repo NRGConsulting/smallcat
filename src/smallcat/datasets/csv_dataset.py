@@ -1,27 +1,27 @@
 """CSV dataset using DuckDB's CSV reader/writer.
 
 This module defines :class:`CSVDataset`, a concrete dataset for CSV/TSV/DSV
-files using DuckDB (`read_csv_auto` / `COPY ... WITH (FORMAT CSV)`).
+files using DuckDB (`read_csv` / `Relation.write_csv`).
 All paths are treated as **relative** to the dataset's base URI.
 
 Features:
-  * Auto-schema inference (delimiter, header, types) with overrides.
+  * Auto-schema inference (separator, header, column types) with overrides.
   * Large-file handling via DuckDB streaming.
-  * Optional Hive-style partitioning on write.
+  * Compression inferred from the file extension on write (`.gz`, `.zst`).
 
 Example:
   >>> ds = CSVDataset.from_conn_id("local_fs")
   >>> tbl = ds.load_arrow_table("bronze/raw/users.csv")
   >>> ds.save_arrow_table("silver/users/", tbl)
 
-Typical options (suggested):
-  * Load: `header`, `delimiter`, `columns`, `nullstr`, `types`.
-  * Save: `header`, `delimiter`, `partition_by`, `overwrite`.
+Options:
+  * :class:`CSVLoadOptions`: `columns`, `sep`, `header`, `sample_size`,
+    `all_varchar`.
+  * :class:`CSVSaveOptions`: `header`, `sep`, `overwrite`.
 
 Note:
-  An implementation typically builds SQL like:
-  `SELECT * FROM read_csv_auto(? , ...options...)` for reading and
-  `COPY (SELECT * FROM tmp_input) TO ? WITH (FORMAT CSV, ...)` for writing.
+  Reading calls `DuckDBPyConnection.read_csv` and runs the query over the
+  resulting relation; writing calls `Relation.write_csv`.
 """
 
 from __future__ import annotations
@@ -40,23 +40,21 @@ if typing.TYPE_CHECKING:
 class CSVLoadOptions(BaseModel):
     r"""Options that control how CSV files are *read*.
 
-    These mirror DuckDB's `read_csv_auto` parameters we expose.
+    These mirror the DuckDB `read_csv` parameters we expose.
     All fields are optional; unset values defer to DuckDB defaults.
 
     Attributes:
-    ----------
-    columns
-        Optional mapping of column names to logical types
-        (e.g. {"id": "INTEGER", "amount": "DOUBLE"}) used to override
-        DuckDB's type inference when auto-detect is not good enough.
-    sep
-        Field separator (e.g. ",", "|", "\t"). If None, DuckDB will try to detect it.
-    header
-        Whether the first row contains column names. If None, DuckDB will detect.
-    sample_size
-        Number of rows to sample for schema detection. If None, DuckDB default applies.
-    all_varchar
-        If True, read all columns as VARCHAR (string). Useful when types are messy.
+        columns: Optional mapping of column names to logical types
+            (e.g. {"id": "INTEGER", "amount": "DOUBLE"}) used to override
+            DuckDB's type inference when auto-detect is not good enough.
+        sep: Field separator (e.g. ",", "|", "\t"). If None, DuckDB will try
+            to detect it.
+        header: Whether the first row contains column names. If None, DuckDB
+            will detect it.
+        sample_size: Number of rows to sample for schema detection. If None,
+            the DuckDB default applies.
+        all_varchar: If True, read all columns as VARCHAR (string). Useful
+            when types are messy.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -87,14 +85,11 @@ class CSVSaveOptions(BaseModel):
     r"""Options that control how CSV files are *written*.
 
     Attributes:
-    ----------
-    header
-        Whether to write a header row with column names.
-    sep
-        Field separator to use when writing (e.g. ',', '|', '\t').
-    overwrite
-        If True, allow overwriting existing files at the destination.
-        Compression is *inferred from the file extension* ('.gz', '.zst', …).
+        header: Whether to write a header row with column names.
+        sep: Field separator to use when writing (e.g. ',', '|', '\t').
+        overwrite: If True, allow overwriting existing files at the
+            destination. Compression is *inferred from the file extension*
+            ('.gz', '.zst', …).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -119,15 +114,16 @@ class CSVDataset(BaseDataset[CSVLoadOptions, CSVSaveOptions]):
 
     - **Paths** are resolved relative to the dataset's connection base
       (local filesystem, `gs://`, etc.).
-    - **Reading** uses `DuckDBPyConnection.read_csv` under the hood and returns a
-      `pyarrow.Table`.
+    - **Reading** uses `DuckDBPyConnection.read_csv` under the hood and streams
+      the rows as Arrow record batches (or a `pyarrow.Table` through
+      `load_arrow_table`).
     - **Writing** uses `Relation.write_csv` to materialize a table to CSV.
 
-    Notes:
-    -----
-    - Use :class:`CSVLoadOptions` to override auto-detection (separator, header,
-      per-column types).
-    - Use :class:`CSVSaveOptions` to control delimiter, header, and overwrite behavior.
+    Note:
+        - Use :class:`CSVLoadOptions` to override auto-detection (separator,
+          header, per-column types).
+        - Use :class:`CSVSaveOptions` to control the separator, header and
+          overwrite behavior.
     """
 
     def load_arrow_record_batch_reader(
@@ -146,18 +142,14 @@ class CSVDataset(BaseDataset[CSVLoadOptions, CSVSaveOptions]):
     def save_arrow_table(self, path: str, table: pa.Table) -> None:
         """Write a PyArrow Table to CSV.
 
-        Parameters
-        ----------
-        path
-            Destination path (file or pattern) relative to the connection base.
-            Compression is inferred from the extension (e.g. '.gz', '.zst').
-        table
-            The Arrow table to write.
+        Args:
+            path: Destination path (file or pattern) relative to the
+                connection base. Compression is inferred from the extension
+                (e.g. '.gz', '.zst').
+            table: The Arrow table to write.
 
         Raises:
-        ------
-        duckdb.IOException
-            If the destination is not writable.
+            duckdb.IOException: If the destination is not writable.
         """
         full_uri = self._full_uri(path)
         with self._duckdb_conn() as con:

@@ -60,7 +60,7 @@ class ParquetSaveOptions(BaseModel):
     write_partition_columns: bool | None = Field(None)
 
 
-class ParquetDataset(BaseDataset):
+class ParquetDataset(BaseDataset[ParquetLoadOptions, ParquetSaveOptions]):
     """Parquet dataset backed by DuckDB's Parquet reader/writer.
 
     Paths passed to public methods are treated as **relative** to the dataset's
