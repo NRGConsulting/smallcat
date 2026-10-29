@@ -405,7 +405,6 @@ class Catalog(BaseModel):
 
         Raises:
             KeyError: If the key is not present in the catalog.
-            ValueError: If the entry's `file_format` is not supported.
         """
         entry = self._get_entry(key)
         return entry.build_dataset()
