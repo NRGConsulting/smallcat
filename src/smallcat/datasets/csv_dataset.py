@@ -29,7 +29,7 @@ from __future__ import annotations
 import typing
 from collections.abc import Mapping  # noqa: TC003
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from smallcat.datasets.base_dataset import BaseDataset
 
@@ -58,6 +58,8 @@ class CSVLoadOptions(BaseModel):
     all_varchar
         If True, read all columns as VARCHAR (string). Useful when types are messy.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     columns: Mapping[str, str] | None = Field(
         None,
@@ -94,6 +96,8 @@ class CSVSaveOptions(BaseModel):
         If True, allow overwriting existing files at the destination.
         Compression is *inferred from the file extension* ('.gz', '.zst', …).
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     header: bool | None = Field(
         None,

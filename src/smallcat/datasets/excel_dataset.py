@@ -20,7 +20,7 @@ Options:
 """
 
 import pyarrow as pa
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from smallcat.datasets.base_dataset import (
     BaseDataset,
@@ -41,6 +41,8 @@ class ExcelLoadOptions(BaseModel):
       empty_as_varchar: If True, treat empty columns as VARCHAR instead of NULL/typed.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     header: bool | None = Field(None)
     sheet: str | None = Field(None)
     range: str | None = Field(None)
@@ -55,6 +57,8 @@ class ExcelSaveOptions(BaseModel):
       header: If True, include column headers in the output file.
       sheet: Optional worksheet name to write into (created if missing).
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     header: bool | None = Field(None)
     sheet: str | None = Field(None)
