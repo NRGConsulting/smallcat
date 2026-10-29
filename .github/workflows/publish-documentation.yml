@@ -24,7 +24,7 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
       - uses: actions/setup-python@v5
         with:
-          python-version: 3.x
+          python-version: "3.13"   # same version as publish.yml
       - run: echo "cache_id=$(date --utc '+%V')" >> $GITHUB_ENV
       - uses: actions/cache@v4
         with:
@@ -32,5 +32,9 @@ jobs:
           path: ~/.cache
           restore-keys: |
             mkdocs-material-
-      - run: pip install mkdocs-material mkdocstrings[python] pymdown-extensions mkdocs-include-markdown-plugin
+      # Versions come from the `docs` dependency group in pyproject.toml.
+      # `pip install --group` (PEP 735) needs pip >= 25.1.
+      - run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . --group docs
       - run: mkdocs gh-deploy --force

@@ -110,6 +110,9 @@ plugins:
         python:
           paths: ["src"]
           options:
+            extensions:
+              - griffe_pydantic:
+                  schema: false
             annotations_path: source
             docstring_options:
               ignore_init_summary: true
