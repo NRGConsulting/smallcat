@@ -45,6 +45,10 @@ docs = [
     "pymdown-extensions>=10.16.1",
 ]
 
+[tool.pdm.scripts]
+gen_req = "pdm export -o requirements.txt --without-hashes"
+lint.composite = ["ruff check --fix", "ruff format"]
+
 [build-system]
 requires = ["hatchling>=1.25", "hatch-vcs>=0.4"]
 build-backend = "hatchling.build"

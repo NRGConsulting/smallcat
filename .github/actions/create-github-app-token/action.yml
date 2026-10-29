@@ -1,0 +1,53 @@
+name: Create GitHub App token
+description: Create a scoped GitHub App installation token.
+
+inputs:
+  client-id:
+    description: GitHub App Client ID.
+    required: true
+  private-key:
+    description: GitHub App private key.
+    required: true
+  owner:
+    description: GitHub App installation owner.
+    required: false
+  repositories:
+    description: Comma-separated repositories to authorize.
+    required: false
+  permission-contents:
+    description: Contents permission for the installation token.
+    required: false
+  permission-issues:
+    description: Issues permission for the installation token.
+    required: false
+  permission-metadata:
+    description: Metadata permission for the installation token.
+    required: false
+  permission-organization-projects:
+    description: Organization Projects permission for the installation token.
+    required: false
+  permission-pull-requests:
+    description: Pull requests permission for the installation token.
+    required: false
+
+outputs:
+  token:
+    description: GitHub App installation access token.
+    value: ${{ steps.create-token.outputs.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Create scoped installation token
+      id: create-token
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
+      with:
+        client-id: ${{ inputs.client-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: ${{ inputs.owner }}
+        repositories: ${{ inputs.repositories }}
+        permission-contents: ${{ inputs.permission-contents }}
+        permission-issues: ${{ inputs.permission-issues }}
+        permission-metadata: ${{ inputs.permission-metadata }}
+        permission-organization-projects: ${{ inputs.permission-organization-projects }}
+        permission-pull-requests: ${{ inputs.permission-pull-requests }}
