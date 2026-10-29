@@ -8,7 +8,7 @@ demand through :func:`get_base_hook`.
 from typing import Any
 
 AIRFLOW_INSTALL_HINT = (
-    "Install it with `pip install smallcat[airflow]`, or use the Apache Airflow "
+    "Install it with `pip install smallcat-chonk[airflow]`, or use the Apache Airflow "
     "already available in your environment."
 )
 """Appended to the errors raised when an operation needs Airflow."""

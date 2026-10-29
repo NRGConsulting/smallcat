@@ -2,22 +2,22 @@
   <img src="docs/assets/images/smallcat-logo.png" width="140" alt="smallcat logo">
 </p>
 
-<h1 align="center">smallcat</h1>
+<h1 align="center">smallcat-chonk</h1>
 <p align="center"><em>A small, modular data catalog.</em></p>
 
 <p align="center">
-  <a href="https://pypi.org/project/smallcat/"><img src="https://img.shields.io/pypi/v/smallcat.svg" alt="PyPI"></a>
-  <a href="https://pypi.org/project/smallcat/"><img src="https://img.shields.io/pypi/pyversions/smallcat.svg" alt="Python versions"></a>
+  <a href="https://pypi.org/project/smallcat-chonk/"><img src="https://img.shields.io/pypi/v/smallcat-chonk.svg" alt="PyPI"></a>
+  <a href="https://pypi.org/project/smallcat-chonk/"><img src="https://img.shields.io/pypi/pyversions/smallcat-chonk.svg" alt="Python versions"></a>
   <a href="https://github.com/NRGConsulting/smallcat/actions"><img src="https://img.shields.io/github/actions/workflow/status/NRGConsulting/smallcat/publish.yml?label=CI" alt="CI"></a>
   <a href="https://codecov.io/gh/NRGConsulting/smallcat"><img src="https://img.shields.io/codecov/c/github/NRGConsulting/smallcat" alt="coverage"></a>
   <a href="https://github.com/NRGConsulting/smallcat/blob/main/LICENSE"><img src="https://img.shields.io/github/license/NRGConsulting/smallcat.svg" alt="license"></a>
-  <a href="https://pepy.tech/project/smallcat"><img src="https://static.pepy.tech/badge/smallcat" alt="downloads"></a>
+  <a href="https://pepy.tech/project/smallcat-chonk"><img src="https://static.pepy.tech/badge/smallcat-chonk" alt="downloads"></a>
   <a href="https://nrgconsulting.github.io/smallcat/"><img src="https://img.shields.io/badge/docs-mkdocs%20material-blue" alt="docs"></a>
 </p>
 
 ## Install
 ```bash
-pip install smallcat
+pip install smallcat-chonk
 ```
 
 ## Quickstart

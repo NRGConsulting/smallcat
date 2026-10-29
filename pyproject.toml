@@ -1,5 +1,5 @@
 [project]
-name = "smallcat"
+name = "smallcat-chonk"
 dynamic = ["version"]
 description = "Add your description here"
 readme = "README.md"

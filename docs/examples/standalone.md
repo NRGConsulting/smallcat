@@ -1,17 +1,17 @@
-# Smallcat standalone
-Use Smallcat without any dependencies.
+# smallcat-chonk standalone
+Use smallcat-chonk without any dependencies.
 
 ## Setup
-### Install smallcat
+### Install smallcat-chonk
 
 ```sh
-pip install smallcat
+pip install smallcat-chonk
 ```
 
 or
 
 ```sh
-uv add smallcat
+uv add smallcat-chonk
 ```
 
 ### Create an example catalog
