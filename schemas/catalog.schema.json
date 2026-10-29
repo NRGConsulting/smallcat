@@ -1,5 +1,186 @@
 {
   "$defs": {
+    "AwsConnectionExtraSchema": {
+      "additionalProperties": false,
+      "description": "Extra options for an Amazon S3 (or S3-compatible) connection.\n\nThe names match the ones of the Airflow `aws` connection, so an Airflow\nconnection can be reused as it is.\n\nAttributes:\n    base_uri: Explicit base URI (for example `s3://bucket/prefix`). Takes\n        precedence over `bucket` and `prefix`.\n    bucket: Bucket name used to build the base URI.\n    prefix: Optional path inside the bucket, appended to the bucket.\n    region_name: AWS region (for example `eu-west-1`).\n    endpoint_url: Custom endpoint for S3-compatible stores such as MinIO\n        (for example `http://minio:9000`). Switches to path-style requests.\n    profile_name: Named profile of the AWS config files to take credentials\n        from. A profile that sets `role_arn` and `source_profile` assumes\n        that IAM role.\n    aws_session_token: Session token that goes with static keys.",
+      "properties": {
+        "base_uri": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit base URI. Takes precedence over 'bucket' and 'prefix'.",
+          "title": "Base Uri"
+        },
+        "bucket": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Bucket name used to build the base URI (s3://bucket).",
+          "title": "Bucket"
+        },
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional path inside the bucket, appended to the base URI.",
+          "title": "Prefix"
+        },
+        "region_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "AWS region, e.g. eu-west-1.",
+          "title": "Region Name"
+        },
+        "endpoint_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Custom endpoint for S3-compatible stores, e.g. http://minio:9000.",
+          "title": "Endpoint Url"
+        },
+        "profile_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Profile of the AWS config files to take credentials from. A profile with `role_arn` and `source_profile` assumes that IAM role.",
+          "title": "Profile Name"
+        },
+        "aws_session_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Session token that goes with static keys (login/password).",
+          "title": "Aws Session Token"
+        }
+      },
+      "title": "AwsConnectionExtraSchema",
+      "type": "object"
+    },
+    "AwsConnectionSchema": {
+      "additionalProperties": false,
+      "description": "Amazon S3 (or S3-compatible) connection.\n\nCredentials are, in order of preference: IAM roles and the rest of the AWS\ncredential chain (leave `login` and `password` empty), or static keys in\n`login` (access key id) and `password` (secret access key).\n\nAttributes:\n    conn_type: Discriminator for this connection type (`\"aws\"`, or its alias\n        `\"s3\"`).\n    extra: S3-specific options.",
+      "properties": {
+        "host": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Network host or endpoint (e.g., domain name or IP). Leave unset if not applicable.",
+          "title": "Host"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Logical schema / namespace / protocol segment.",
+          "title": "Schema"
+        },
+        "login": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Username or identity used for authentication.",
+          "title": "Login"
+        },
+        "password": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Secret or token used for authentication (keep secure).",
+          "title": "Password"
+        },
+        "conn_type": {
+          "default": "aws",
+          "description": "Connection type discriminator: \"aws\" or its alias \"s3\".",
+          "enum": [
+            "aws",
+            "s3"
+          ],
+          "title": "Conn Type",
+          "type": "string"
+        },
+        "extra": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AwsConnectionExtraSchema"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Type-specific options including credential configuration."
+        }
+      },
+      "title": "AwsConnectionSchema",
+      "type": "object"
+    },
     "CSVEntry": {
       "additionalProperties": false,
       "description": "Catalog entry describing a CSV dataset.\n\nAttributes:\n    file_format: Literal string identifying the file format: `'csv'`.\n    load_options: Options controlling CSV *reading* (see `CSVLoadOptions`).\n    save_options: Options controlling CSV *writing* (see `CSVSaveOptions`).",
@@ -12,9 +193,11 @@
             {
               "discriminator": {
                 "mapping": {
+                  "aws": "#/$defs/AwsConnectionSchema",
                   "fs": "#/$defs/LocalFsConnectionSchema",
                   "google": "#/$defs/GoogleCloudPlatformConnectionSchema",
-                  "google_cloud_platform": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                  "google_cloud_platform": "#/$defs/GoogleCloudPlatformConnectionSchema",
+                  "s3": "#/$defs/AwsConnectionSchema"
                 },
                 "propertyName": "conn_type"
               },
@@ -24,6 +207,9 @@
                 },
                 {
                   "$ref": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                },
+                {
+                  "$ref": "#/$defs/AwsConnectionSchema"
                 }
               ]
             }
@@ -207,9 +393,11 @@
             {
               "discriminator": {
                 "mapping": {
+                  "aws": "#/$defs/AwsConnectionSchema",
                   "fs": "#/$defs/LocalFsConnectionSchema",
                   "google": "#/$defs/GoogleCloudPlatformConnectionSchema",
-                  "google_cloud_platform": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                  "google_cloud_platform": "#/$defs/GoogleCloudPlatformConnectionSchema",
+                  "s3": "#/$defs/AwsConnectionSchema"
                 },
                 "propertyName": "conn_type"
               },
@@ -219,6 +407,9 @@
                 },
                 {
                   "$ref": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                },
+                {
+                  "$ref": "#/$defs/AwsConnectionSchema"
                 }
               ]
             }
@@ -371,9 +562,11 @@
             {
               "discriminator": {
                 "mapping": {
+                  "aws": "#/$defs/AwsConnectionSchema",
                   "fs": "#/$defs/LocalFsConnectionSchema",
                   "google": "#/$defs/GoogleCloudPlatformConnectionSchema",
-                  "google_cloud_platform": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                  "google_cloud_platform": "#/$defs/GoogleCloudPlatformConnectionSchema",
+                  "s3": "#/$defs/AwsConnectionSchema"
                 },
                 "propertyName": "conn_type"
               },
@@ -383,6 +576,9 @@
                 },
                 {
                   "$ref": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                },
+                {
+                  "$ref": "#/$defs/AwsConnectionSchema"
                 }
               ]
             }
@@ -533,7 +729,7 @@
     },
     "GoogleCloudPlatformConnectionExtraSchema": {
       "additionalProperties": false,
-      "description": "Extra options for a Google Cloud Storage-style connection.\n\nExactly one of the key sources may be provided, depending on how\ncredentials are supplied.\n\nAttributes:\n    keyfile_dict: Service account credentials as a mapping (already-parsed\n        JSON). Useful when credentials are injected as structured data.\n    keyfile: Service account credentials as a raw JSON string.\n    key_path: Filesystem path to a service account key file accessible at\n        runtime.\n    base_uri: Explicit base URI (for example `gs://bucket/prefix`). Takes\n        precedence over `bucket` and `prefix`.\n    bucket: Bucket name used to build the base URI.\n    prefix: Optional path inside the bucket, appended to the bucket.",
+      "description": "Extra options for a Google Cloud Storage-style connection.\n\nAt most one of `keyfile_dict`, `keyfile` and `key_path` may be provided;\nthe connection is rejected otherwise.\n\nAttributes:\n    keyfile_dict: Service account credentials as a mapping (already-parsed\n        JSON). Useful when credentials are injected as structured data.\n    keyfile: Service account credentials as a raw JSON string.\n    key_path: Filesystem path to a service account key file accessible at\n        runtime.\n    base_uri: Explicit base URI (for example `gs://bucket/prefix`). Takes\n        precedence over `bucket` and `prefix`.\n    bucket: Bucket name used to build the base URI.\n    prefix: Optional path inside the bucket, appended to the bucket.",
       "properties": {
         "base_uri": {
           "anyOf": [
@@ -825,9 +1021,11 @@
             {
               "discriminator": {
                 "mapping": {
+                  "aws": "#/$defs/AwsConnectionSchema",
                   "fs": "#/$defs/LocalFsConnectionSchema",
                   "google": "#/$defs/GoogleCloudPlatformConnectionSchema",
-                  "google_cloud_platform": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                  "google_cloud_platform": "#/$defs/GoogleCloudPlatformConnectionSchema",
+                  "s3": "#/$defs/AwsConnectionSchema"
                 },
                 "propertyName": "conn_type"
               },
@@ -837,6 +1035,9 @@
                 },
                 {
                   "$ref": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                },
+                {
+                  "$ref": "#/$defs/AwsConnectionSchema"
                 }
               ]
             }

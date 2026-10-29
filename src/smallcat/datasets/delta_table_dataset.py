@@ -33,6 +33,7 @@ import pyarrow as pa
 from deltalake import DeltaTable, write_deltalake
 from pydantic import BaseModel, ConfigDict, Field
 
+from smallcat.connections import AWS_CONN_TYPES, validate_gcp_credentials
 from smallcat.datasets.base_dataset import BaseDataset
 
 DATABRICKS_UNSUPPORTED_MSG = (
@@ -137,6 +138,8 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
         Raises:
           ValueError: If the connection type is not supported.
         """
+        if (self.conn.conn_type or "").lower() in AWS_CONN_TYPES:
+            return self._aws_storage_options()
         if (self.conn.conn_type or "").lower() not in {
             "fs",
             "google_cloud_platform",
@@ -147,6 +150,8 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
                 msg,
             )
         x = self.extras
+        if (self.conn.conn_type or "").lower() != "fs":
+            validate_gcp_credentials(self.conn.login, self.conn.password, x)
 
         # keyfile_dict can be dict or JSON string
         kfd = x.get("keyfile_dict")
@@ -176,6 +181,38 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
                 stacklevel=2,
             )
         return {}
+
+    def _aws_storage_options(self) -> dict:
+        """Build delta-rs `storage_options` for an S3 connection.
+
+        Static keys are passed as they are. Without keys, delta-rs finds IAM role
+        credentials by itself (environment, web identity, ECS, instance profile).
+        If the connection names a `profile_name`, the credentials are resolved
+        first through DuckDB's AWS credential chain.
+
+        Returns:
+          A mapping with `aws_*` keys for `DeltaTable` / `write_deltalake`.
+
+        Raises:
+          ValueError: If the credential settings contradict each other.
+        """
+        s = self._aws_connection_settings()
+        options: dict[str, str] = {}
+        if s["region"]:
+            options["aws_region"] = s["region"]
+        if s["endpoint"]:
+            scheme = "https" if s["use_ssl"] else "http"
+            options["aws_endpoint"] = f"{scheme}://{s['endpoint']}"
+            if not s["use_ssl"]:
+                options["aws_allow_http"] = "true"
+        if s["key_id"]:
+            options["aws_access_key_id"] = s["key_id"]
+            options["aws_secret_access_key"] = s["secret"]
+            if s["session_token"]:
+                options["aws_session_token"] = s["session_token"]
+        elif s["profile"]:
+            options.update(self._resolve_aws_credentials())
+        return options
 
     def load_arrow_record_batch_reader(
         self,
