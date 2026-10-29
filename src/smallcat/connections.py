@@ -11,9 +11,9 @@ are compatible with :class:`ConnectionProtocol`.
 """
 
 import json
-from typing import Literal, Protocol
+from typing import Literal, Protocol, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ConnectionProtocol(Protocol):
@@ -268,6 +268,130 @@ class GoogleCloudPlatformConnectionSchema(BaseConnectionSchema):
     )
 
 
+AWS_CONN_TYPES = ("aws", "s3")
+"""Connection types handled as Amazon S3 (`aws` is the Airflow type)."""
+
+
+def validate_aws_credentials(
+    login: str | None,
+    password: str | None,
+    extras: dict,
+) -> None:
+    """Check that the credential settings of an S3 connection are coherent.
+
+    An S3 connection authenticates in one of two ways: **static keys**
+    (`login` + `password`, optionally with `aws_session_token`) or the AWS
+    **credential chain** (IAM roles and everything else the AWS SDK finds),
+    optionally narrowed with `profile_name`. They cannot be mixed.
+
+    Args:
+        login: Access key id, if any.
+        password: Secret access key, if any.
+        extras: The connection's `extra` mapping.
+
+    Raises:
+        ValueError: If the combination of settings is not supported.
+    """
+    if bool(login) != bool(password):
+        msg = "AWS static keys need both `login` (access key id) and `password`."
+        raise ValueError(msg)
+    if login:
+        if extras.get("profile_name"):
+            msg = (
+                "`profile_name` cannot be combined with static keys "
+                "(login/password): remove the keys to use the AWS credential chain."
+            )
+            raise ValueError(msg)
+    elif extras.get("aws_session_token"):
+        msg = "`aws_session_token` needs static keys (login/password)."
+        raise ValueError(msg)
+
+
+class AwsConnectionExtraSchema(BaseModel):
+    """Extra options for an Amazon S3 (or S3-compatible) connection.
+
+    The names match the ones of the Airflow `aws` connection, so an Airflow
+    connection can be reused as it is.
+
+    Attributes:
+        base_uri: Explicit base URI (for example `s3://bucket/prefix`). Takes
+            precedence over `bucket` and `prefix`.
+        bucket: Bucket name used to build the base URI.
+        prefix: Optional path inside the bucket, appended to the bucket.
+        region_name: AWS region (for example `eu-west-1`).
+        endpoint_url: Custom endpoint for S3-compatible stores such as MinIO
+            (for example `http://minio:9000`). Switches to path-style requests.
+        profile_name: Named profile of the AWS config files to take credentials
+            from. A profile that sets `role_arn` and `source_profile` assumes
+            that IAM role.
+        aws_session_token: Session token that goes with static keys.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    base_uri: str | None = Field(
+        None,
+        description="Explicit base URI. Takes precedence over 'bucket' and 'prefix'.",
+    )
+    bucket: str | None = Field(
+        None,
+        description="Bucket name used to build the base URI (s3://bucket).",
+    )
+    prefix: str | None = Field(
+        None,
+        description="Optional path inside the bucket, appended to the base URI.",
+    )
+    region_name: str | None = Field(None, description="AWS region, e.g. eu-west-1.")
+    endpoint_url: str | None = Field(
+        None,
+        description=(
+            "Custom endpoint for S3-compatible stores, e.g. http://minio:9000."
+        ),
+    )
+    profile_name: str | None = Field(
+        None,
+        description=(
+            "Profile of the AWS config files to take credentials from. A profile "
+            "with `role_arn` and `source_profile` assumes that IAM role."
+        ),
+    )
+    aws_session_token: str | None = Field(
+        None,
+        description="Session token that goes with static keys (login/password).",
+    )
+
+
+class AwsConnectionSchema(BaseConnectionSchema):
+    """Amazon S3 (or S3-compatible) connection.
+
+    Credentials are, in order of preference: IAM roles and the rest of the AWS
+    credential chain (leave `login` and `password` empty), or static keys in
+    `login` (access key id) and `password` (secret access key).
+
+    Attributes:
+        conn_type: Discriminator for this connection type (`"aws"`, or its alias
+            `"s3"`).
+        extra: S3-specific options.
+    """
+
+    conn_type: Literal["aws", "s3"] = Field(
+        "aws",
+        description='Connection type discriminator: "aws" or its alias "s3".',
+    )
+    extra: AwsConnectionExtraSchema | None = Field(
+        None,
+        description="Type-specific options including credential configuration.",
+    )
+
+    @model_validator(mode="after")
+    def _check_credentials(self) -> Self:
+        extras = self.extra.model_dump(exclude_none=True) if self.extra else {}
+        validate_aws_credentials(self.login, self.password, extras)
+        return self
+
+
 SupportedConnectionSchemas = (
-    LocalFsConnectionSchema | GoogleCloudPlatformConnectionSchema
+    LocalFsConnectionSchema
+    | GoogleCloudPlatformConnectionSchema
+    | AwsConnectionSchema
 )

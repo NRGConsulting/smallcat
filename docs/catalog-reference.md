@@ -113,7 +113,7 @@ mapping. An inline mapping is validated when the catalog is loaded, against the
 schema selected by its `conn_type`:
 
 * `conn_type` is required and must be `fs`, `google_cloud_platform` (or its
-  alias `google`). Any other value is rejected.
+  alias `google`) or `aws` (alias `s3`). Any other value is rejected.
 * Unknown keys are rejected, both at the top level and inside `extra`, so a
   typo such as `base_pth` is reported instead of ignored.
 
@@ -152,6 +152,51 @@ A mismatch does not fail silently: a DuckDB-based dataset with only a service
 account, or a Delta dataset with only HMAC keys, emits a `UserWarning` and
 accesses the bucket without credentials.
 
+### Amazon S3 (`aws`)
+
+```yaml
+connection:
+  conn_type: aws
+  extra:
+    bucket: my-bucket
+    prefix: raw                    # or base_uri: s3://my-bucket/raw
+    region_name: eu-west-1
+```
+
+The `extra` names are the ones of the Airflow `aws` connection, so an Airflow
+connection id of that type can be used as well.
+
+| `extra` key         | Description |
+|---------------------|-------------|
+| `bucket`, `prefix`  | Build the base URI `s3://bucket/prefix`. |
+| `base_uri`          | Explicit base URI; takes precedence over `bucket`/`prefix`. |
+| `region_name`       | AWS region. |
+| `endpoint_url`      | Endpoint of an S3-compatible store such as MinIO (`http://minio:9000`). Uses path-style requests, and plain HTTP when the URL says `http://`. |
+| `profile_name`      | Profile of the AWS config files to take credentials from. |
+| `aws_session_token` | Session token that goes with static keys. |
+
+**Credentials.** There are two mutually exclusive ways to authenticate:
+
+* **IAM roles and the AWS credential chain** (recommended): leave `login` and
+  `password` empty. The credentials are found the way the AWS SDK finds them:
+  environment variables, web identity (EKS service accounts), ECS task roles,
+  EC2 instance profiles, SSO and the shared AWS files. To assume a role, define
+  a profile with `role_arn` and `source_profile` in `~/.aws/config` and name it
+  in `profile_name`.
+* **Static keys**: `login` is the access key id and `password` the secret
+  access key (plus `aws_session_token` for temporary keys).
+
+Combining static keys with `profile_name`, or giving only one of `login` and
+`password`, is rejected.
+
+| Formats                   | Engine   | How the credential chain is resolved |
+|---------------------------|----------|--------------------------------------|
+| `csv`, `parquet`, `excel` | DuckDB   | By DuckDB's `aws` extension. |
+| `delta_table`             | delta-rs | By delta-rs itself (environment, web identity, ECS, instance profile). With `profile_name`, the credentials are resolved by DuckDB and handed to delta-rs; they are temporary and are not refreshed during a long operation. |
+
+Delta tables on S3 are written without DynamoDB locking, which relies on S3
+conditional writes.
+
 ### Not supported
 
 Databricks connections are rejected with `NotImplementedError` when reading or
@@ -170,8 +215,8 @@ names only.
 
 Reading or writing local files needs no network access. The DuckDB `httpfs`
 extension is loaded only for remote storage (`gs://`, `s3://`, `https://`), and
-the `excel` extension is installed on first use and then reused from DuckDB's
-cache.
+the `excel` extension (and the `aws` extension, for the credential chain of S3
+connections) is installed on first use and then reused from DuckDB's cache.
 
 ## Airflow
 

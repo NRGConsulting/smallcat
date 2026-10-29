@@ -37,11 +37,19 @@ from pydantic import BaseModel
 from sqlalchemy import MetaData, Table, literal_column, select, text
 
 from smallcat._airflow import AIRFLOW_INSTALL_HINT, get_base_hook
-from smallcat.connections import ConnectionLike, ConnectionProtocol
+from smallcat.connections import (
+    AWS_CONN_TYPES,
+    ConnectionLike,
+    ConnectionProtocol,
+    validate_aws_credentials,
+)
 from smallcat.path_utils import norm_join_uri, to_relative_posix_path
 
 # Connection extras that carry Google service account credentials.
 GCP_SERVICE_ACCOUNT_EXTRAS = ("keyfile_dict", "keyfile", "key_path")
+
+# Credential chain used when DuckDB's default one fails: no `config` provider.
+AWS_FALLBACK_CHAIN = "env;sso;process;web_identity;instance"
 
 
 def ensure_extension(con: duckdb.DuckDBPyConnection, name: str) -> None:
@@ -422,7 +430,7 @@ class BaseDataset(ABC, Generic[L, S]):
             stmt = stmt.where(text(f"({where})"))
         return stmt.compile(compile_kwargs={"literal_binds": True}).string
 
-    def _infer_base_uri(self) -> str | None:  # noqa: PLR0911
+    def _infer_base_uri(self) -> str | None:  # noqa: PLR0911, C901
         """Infer a base URI from the connection configuration.
 
         Rules:
@@ -432,6 +440,8 @@ class BaseDataset(ABC, Generic[L, S]):
             working directory.
           * `google_cloud_platform` / `google`: use `extras.base_uri`; otherwise
             derive from `gs://{bucket}` and optional `prefix`.
+          * `aws` / `s3`: use `extras.base_uri`; otherwise derive from
+            `s3://{bucket}` and optional `prefix`.
           * Other/unknown types: fall back to `extras.base_uri` if present.
 
         Returns:
@@ -463,17 +473,27 @@ class BaseDataset(ABC, Generic[L, S]):
             # Last resort: no bucket provided
             return None
 
+        if ctype in AWS_CONN_TYPES:
+            if x.get("base_uri"):
+                return x["base_uri"]
+            bucket = x.get("bucket")
+            if bucket:
+                return norm_join_uri(f"s3://{bucket}", x.get("prefix", ""))
+            return None
+
         # Unknown type: try an explicit base_uri if provided
         return x.get("base_uri")
 
     def _needs_httpfs(self) -> bool:
         """Return True if DuckDB needs `httpfs` to reach this dataset's storage.
 
-        True for Google connections (the GCS secret is provided by `httpfs`) and
+        True for Google and AWS connections (their secrets are provided by
+        `httpfs`) and
         for any base URI with a scheme other than ``file://`` (``gs://``,
         ``s3://``, ``https://``...). Local paths do not need it.
         """
-        if (self.conn.conn_type or "").lower() in {"google_cloud_platform", "google"}:
+        ctype = (self.conn.conn_type or "").lower()
+        if ctype in {"google_cloud_platform", "google", *AWS_CONN_TYPES}:
             return True
         scheme = re.match(r"^([a-zA-Z][a-zA-Z0-9+.-]*)://", self.base_uri or "")
         return scheme is not None and scheme.group(1).lower() != "file"
@@ -483,8 +503,8 @@ class BaseDataset(ABC, Generic[L, S]):
 
         The connection loads the `json` and `parquet` extensions. `httpfs` is
         loaded only for remote storage (see :meth:`_needs_httpfs`), so local
-        files work without network access. For GCP-like connections, it also
-        configures a GCS secret.
+        files work without network access. For GCP-like and AWS connections, it
+        also configures the matching secret.
 
         Returns:
           A new, isolated `duckdb.DuckDBPyConnection` instance.
@@ -502,10 +522,137 @@ class BaseDataset(ABC, Generic[L, S]):
         ctype = (self.conn.conn_type or "").lower()
         if ctype in {"google_cloud_platform", "google"}:
             self._configure_gcp_secret(con)
+        elif ctype in AWS_CONN_TYPES:
+            self._configure_s3_secret(con)
 
         return con
 
     # ---------- Backend configuration ----------
+
+    def _aws_connection_settings(self) -> dict[str, Any]:
+        """Return the validated S3 settings of the connection.
+
+        Returns:
+          A dict with `region`, `endpoint` (host[:port]), `use_ssl`, `profile`,
+          `key_id`, `secret` and `session_token`; unset values are `None`.
+
+        Raises:
+          ValueError: If the credential settings contradict each other.
+        """
+        x = self.extras
+        validate_aws_credentials(self.conn.login, self.conn.password, x)
+        endpoint = None
+        use_ssl = True
+        if x.get("endpoint_url"):
+            url = x["endpoint_url"]
+            match = re.match(r"^(?:(https?)://)?([^/]+)", url)
+            endpoint = match.group(2) if match else url
+            use_ssl = not (match and match.group(1) == "http")
+        return {
+            "region": x.get("region_name"),
+            "endpoint": endpoint,
+            "use_ssl": use_ssl,
+            "profile": x.get("profile_name"),
+            "key_id": self.conn.login,
+            "secret": self.conn.password,
+            "session_token": x.get("aws_session_token"),
+        }
+
+    def _configure_s3_secret(self, con: duckdb.DuckDBPyConnection) -> None:
+        """Create a DuckDB S3 secret from the connection.
+
+        With `login` and `password` the secret holds those static keys (plus the
+        optional session token). Without them it uses the AWS credential chain,
+        which is how **IAM roles** work: an instance profile, an ECS task role,
+        a web identity (EKS service accounts), environment variables or SSO. A
+        `profile_name` restricts it to that profile, which may itself assume an
+        IAM role (`role_arn` + `source_profile` in the AWS config file).
+
+        Args:
+          con: An open DuckDB connection to configure.
+
+        Raises:
+          ValueError: If the credential settings contradict each other.
+        """
+        s = self._aws_connection_settings()
+        options = []
+        if s["key_id"]:
+            options += [
+                f"KEY_ID {sql_string_literal(s['key_id'])}",
+                f"SECRET {sql_string_literal(s['secret'])}",
+            ]
+            if s["session_token"]:
+                token = sql_string_literal(s["session_token"])
+                options.append(f"SESSION_TOKEN {token}")
+        else:
+            ensure_extension(con, "aws")
+            options.append("PROVIDER credential_chain")
+            if s["profile"]:
+                options += [
+                    "CHAIN 'config'",
+                    f"PROFILE {sql_string_literal(s['profile'])}",
+                ]
+        if s["region"]:
+            options.append(f"REGION {sql_string_literal(s['region'])}")
+        if s["endpoint"]:
+            options += [
+                f"ENDPOINT {sql_string_literal(s['endpoint'])}",
+                "URL_STYLE 'path'",
+                f"USE_SSL {'true' if s['use_ssl'] else 'false'}",
+            ]
+        try:
+            self._create_s3_secret(con, options)
+        except duckdb.Error:
+            if s["key_id"] or s["profile"]:
+                raise
+            # DuckDB's default chain also reads the `default` profile and fails
+            # when the AWS config file exists without one, even if the
+            # environment or an IAM role would provide the credentials.
+            self._create_s3_secret(con, [*options, f"CHAIN '{AWS_FALLBACK_CHAIN}'"])
+
+    @staticmethod
+    def _create_s3_secret(con: duckdb.DuckDBPyConnection, options: list[str]) -> None:
+        con.execute(f"CREATE OR REPLACE SECRET (TYPE s3, {', '.join(options)});")
+
+    def _resolve_aws_credentials(self) -> dict[str, str]:
+        """Resolve the temporary credentials of the AWS credential chain.
+
+        delta-rs understands environment variables, web identity, ECS and
+        instance-profile credentials on its own, but not named profiles or SSO.
+        For those, the chain is resolved by DuckDB's AWS extension on a
+        throwaway connection and the result is handed to delta-rs. The
+        credentials are temporary: they are resolved when the dataset is used
+        and are not refreshed during a long operation.
+
+        Returns:
+          `aws_access_key_id`, `aws_secret_access_key` and, when present,
+          `aws_session_token`.
+
+        Raises:
+          RuntimeError: If the chain yields no credentials.
+        """
+        con = duckdb.connect(config={"allow_unredacted_secrets": True})
+        try:
+            ensure_extension(con, "httpfs")
+            self._configure_s3_secret(con)
+            row = con.execute(
+                "SELECT secret_string FROM duckdb_secrets(redact = false) "
+                "WHERE type = 's3' AND secret_string LIKE '%;key_id=%'",
+            ).fetchone()
+        finally:
+            con.close()
+        parts = (row[0] if row else "").split(";")
+        fields = dict(part.split("=", 1) for part in parts if "=" in part)
+        if not fields.get("key_id") or not fields.get("secret"):
+            msg = "The AWS credential chain did not return any credentials."
+            raise RuntimeError(msg)
+        creds = {
+            "aws_access_key_id": fields["key_id"],
+            "aws_secret_access_key": fields["secret"],
+        }
+        if fields.get("session_token"):
+            creds["aws_session_token"] = fields["session_token"]
+        return creds
 
     def _configure_gcp_secret(self, con: duckdb.DuckDBPyConnection) -> None:
         """Create a DuckDB GCS secret from the connection's HMAC keys.
