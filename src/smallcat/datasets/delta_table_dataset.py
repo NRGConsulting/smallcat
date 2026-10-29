@@ -33,7 +33,7 @@ import pyarrow as pa
 from deltalake import DeltaTable, write_deltalake
 from pydantic import BaseModel, ConfigDict, Field
 
-from smallcat.connections import AWS_CONN_TYPES
+from smallcat.connections import AWS_CONN_TYPES, validate_gcp_credentials
 from smallcat.datasets.base_dataset import BaseDataset
 
 DATABRICKS_UNSUPPORTED_MSG = (
@@ -150,6 +150,8 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
                 msg,
             )
         x = self.extras
+        if (self.conn.conn_type or "").lower() != "fs":
+            validate_gcp_credentials(self.conn.login, self.conn.password, x)
 
         # keyfile_dict can be dict or JSON string
         kfd = x.get("keyfile_dict")

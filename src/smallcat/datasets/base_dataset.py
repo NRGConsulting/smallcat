@@ -39,14 +39,13 @@ from sqlalchemy import MetaData, Table, literal_column, select, text
 from smallcat._airflow import AIRFLOW_INSTALL_HINT, get_base_hook
 from smallcat.connections import (
     AWS_CONN_TYPES,
+    GCP_SERVICE_ACCOUNT_EXTRAS,
     ConnectionLike,
     ConnectionProtocol,
     validate_aws_credentials,
+    validate_gcp_credentials,
 )
 from smallcat.path_utils import norm_join_uri, to_relative_posix_path
-
-# Connection extras that carry Google service account credentials.
-GCP_SERVICE_ACCOUNT_EXTRAS = ("keyfile_dict", "keyfile", "key_path")
 
 # Credential chain used when DuckDB's default one fails: no `config` provider.
 AWS_FALLBACK_CHAIN = "env;sso;process;web_identity;instance"
@@ -668,9 +667,13 @@ class BaseDataset(ABC, Generic[L, S]):
         Args:
           con: An open DuckDB connection to configure.
 
+        Raises:
+          ValueError: If the credential settings are incoherent.
+
         Warns:
           UserWarning: If only service account credentials are configured.
         """
+        validate_gcp_credentials(self.conn.login, self.conn.password, self.extras)
         if not (self.conn.login and self.conn.password):
             if any(self.extras.get(key) for key in GCP_SERVICE_ACCOUNT_EXTRAS):
                 warnings.warn(

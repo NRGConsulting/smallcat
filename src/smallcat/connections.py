@@ -188,11 +188,47 @@ class LocalFsConnectionSchema(BaseConnectionSchema):
     )
 
 
+GCP_SERVICE_ACCOUNT_EXTRAS = ("keyfile_dict", "keyfile", "key_path")
+"""Connection extras that carry Google service account credentials."""
+
+
+def validate_gcp_credentials(
+    login: str | None,
+    password: str | None,
+    extras: dict,
+) -> None:
+    """Check that the credential settings of a GCS connection are coherent.
+
+    A GCS connection may carry **HMAC keys** (`login` + `password`, used by
+    DuckDB) and/or **one** service account source (`keyfile_dict`, `keyfile` or
+    `key_path`, used by delta-rs). Having both is valid: each engine uses the
+    kind it understands.
+
+    Args:
+        login: HMAC key id, if any.
+        password: HMAC secret, if any.
+        extras: The connection's `extra` mapping.
+
+    Raises:
+        ValueError: If the combination of settings is not supported.
+    """
+    if bool(login) != bool(password):
+        msg = "GCS HMAC keys need both `login` (key id) and `password` (secret)."
+        raise ValueError(msg)
+    sources = [key for key in GCP_SERVICE_ACCOUNT_EXTRAS if extras.get(key)]
+    if len(sources) > 1:
+        msg = (
+            "Provide only one service account source, found "
+            f"{', '.join(f'`{key}`' for key in sources)}."
+        )
+        raise ValueError(msg)
+
+
 class GoogleCloudPlatformConnectionExtraSchema(BaseModel):
     """Extra options for a Google Cloud Storage-style connection.
 
-    Exactly one of the key sources may be provided, depending on how
-    credentials are supplied.
+    At most one of `keyfile_dict`, `keyfile` and `key_path` may be provided;
+    the connection is rejected otherwise.
 
     Attributes:
         keyfile_dict: Service account credentials as a mapping (already-parsed
@@ -266,6 +302,12 @@ class GoogleCloudPlatformConnectionSchema(BaseConnectionSchema):
         None,
         description="Type-specific options including credential configuration.",
     )
+
+    @model_validator(mode="after")
+    def _check_credentials(self) -> Self:
+        extras = self.extra.model_dump(exclude_none=True) if self.extra else {}
+        validate_gcp_credentials(self.login, self.password, extras)
+        return self
 
 
 AWS_CONN_TYPES = ("aws", "s3")

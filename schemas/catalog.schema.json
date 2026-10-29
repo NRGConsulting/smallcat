@@ -729,7 +729,7 @@
     },
     "GoogleCloudPlatformConnectionExtraSchema": {
       "additionalProperties": false,
-      "description": "Extra options for a Google Cloud Storage-style connection.\n\nExactly one of the key sources may be provided, depending on how\ncredentials are supplied.\n\nAttributes:\n    keyfile_dict: Service account credentials as a mapping (already-parsed\n        JSON). Useful when credentials are injected as structured data.\n    keyfile: Service account credentials as a raw JSON string.\n    key_path: Filesystem path to a service account key file accessible at\n        runtime.\n    base_uri: Explicit base URI (for example `gs://bucket/prefix`). Takes\n        precedence over `bucket` and `prefix`.\n    bucket: Bucket name used to build the base URI.\n    prefix: Optional path inside the bucket, appended to the bucket.",
+      "description": "Extra options for a Google Cloud Storage-style connection.\n\nAt most one of `keyfile_dict`, `keyfile` and `key_path` may be provided;\nthe connection is rejected otherwise.\n\nAttributes:\n    keyfile_dict: Service account credentials as a mapping (already-parsed\n        JSON). Useful when credentials are injected as structured data.\n    keyfile: Service account credentials as a raw JSON string.\n    key_path: Filesystem path to a service account key file accessible at\n        runtime.\n    base_uri: Explicit base URI (for example `gs://bucket/prefix`). Takes\n        precedence over `bucket` and `prefix`.\n    bucket: Bucket name used to build the base URI.\n    prefix: Optional path inside the bucket, appended to the bucket.",
       "properties": {
         "base_uri": {
           "anyOf": [

@@ -148,9 +148,23 @@ Credentials depend on the engine that reads the format:
 | `csv`, `parquet`, `excel` | DuckDB | HMAC keys: the connection's `login` (key id) and `password` (secret). |
 | `delta_table`            | delta-rs | Service account: `keyfile_dict`, `keyfile` or `key_path` in `extra`. |
 
+`google` is accepted as an alias of `google_cloud_platform` by every format.
+
+A connection can carry both kinds of credentials: each engine uses the one it
+understands, so the same connection serves CSV/Parquet/Excel and Delta datasets.
 A mismatch does not fail silently: a DuckDB-based dataset with only a service
 account, or a Delta dataset with only HMAC keys, emits a `UserWarning` and
 accesses the bucket without credentials.
+
+Incoherent settings are rejected when the connection is validated (and again
+when a dataset uses an Airflow connection id):
+
+* `login` and `password` must come together.
+* Only one of `keyfile_dict`, `keyfile` and `key_path` may be set.
+
+!!! note
+    DuckDB cannot authenticate with a service account, so CSV, Parquet and Excel
+    datasets on GCS need HMAC keys. Delta datasets need a service account.
 
 ### Amazon S3 (`aws`)
 
