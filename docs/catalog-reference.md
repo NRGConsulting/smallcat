@@ -108,14 +108,28 @@ to the current working directory.
 
 ## Connections
 
+`connection` is either the id of an Airflow connection (a string) or an inline
+mapping. An inline mapping is validated when the catalog is loaded, against the
+schema selected by its `conn_type`:
+
+* `conn_type` is required and must be `fs`, `google_cloud_platform` (or its
+  alias `google`). Any other value is rejected.
+* Unknown keys are rejected, both at the top level and inside `extra`, so a
+  typo such as `base_pth` is reported instead of ignored.
+
+Supported top-level keys are `conn_type`, `host`, `schema`, `login`, `password`
+and `extra`.
+
 ### Local filesystem (`fs`)
 
 ```yaml
 connection:
   conn_type: fs
   extra:
-    base_path: /data/raw
+    base_path: /data/raw       # or base_uri: file:///data/raw
 ```
+
+`extra` is optional; both keys are optional too (see *Locations*).
 
 ### Google Cloud Storage (`google_cloud_platform`)
 
@@ -124,7 +138,7 @@ connection:
   conn_type: google_cloud_platform
   extra:
     bucket: my-bucket
-    prefix: raw
+    prefix: raw                # or base_uri: gs://my-bucket/raw
 ```
 
 Credentials depend on the engine that reads the format:
@@ -141,7 +155,8 @@ accesses the bucket without credentials.
 ### Not supported
 
 Databricks connections are rejected with `NotImplementedError` when reading or
-writing Delta tables.
+writing Delta tables. An inline mapping with another `conn_type` is rejected
+when the catalog is loaded.
 
 ## Filtering on load
 
