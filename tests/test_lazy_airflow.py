@@ -115,4 +115,4 @@ def test_missing_airflow_errors_point_to_the_airflow_extra():
         with pytest.raises(RuntimeError) as from_conn_id:
             CSVDataset.from_conn_id("my_conn")
     for exc in (from_entry, from_conn_id):
-        assert "pip install smallcat[airflow]" in str(exc.value)
+        assert "pip install smallcat-chonk[airflow]" in str(exc.value)

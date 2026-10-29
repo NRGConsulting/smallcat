@@ -1,19 +1,19 @@
-# Smallcat Airflow
-Use Smallcat with Airflow. In this example we'll work locally by reading connections and variables from the Local Filesystem Backend. In production we could deploy the same DAG but the variables and connections would be defined in the database or a Secret Backend
+# smallcat-chonk Airflow
+Use smallcat-chonk with Airflow. In this example we'll work locally by reading connections and variables from the Local Filesystem Backend. In production we could deploy the same DAG but the variables and connections would be defined in the database or a Secret Backend
 
 ## Setup
-### Install smallcat
+### Install smallcat-chonk
 
-Airflow is an optional dependency of smallcat, available as the `airflow` extra.
+Airflow is an optional dependency of smallcat-chonk, available as the `airflow` extra.
 
 ```sh
-pip install "smallcat[airflow]"
+pip install "smallcat-chonk[airflow]"
 ```
 
 or
 
 ```sh
-uv add "smallcat[airflow]"
+uv add "smallcat-chonk[airflow]"
 ```
 
 ### Point Airflow to local secrets files
