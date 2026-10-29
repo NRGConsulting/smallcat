@@ -10,17 +10,25 @@
               "type": "string"
             },
             {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "$ref": "#/$defs/LocalFsConnectionSchema"
-            },
-            {
-              "$ref": "#/$defs/GoogleCloudPlatformConnectionSchema"
+              "discriminator": {
+                "mapping": {
+                  "fs": "#/$defs/LocalFsConnectionSchema",
+                  "google": "#/$defs/GoogleCloudPlatformConnectionSchema",
+                  "google_cloud_platform": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                },
+                "propertyName": "conn_type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/LocalFsConnectionSchema"
+                },
+                {
+                  "$ref": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                }
+              ]
             }
           ],
-          "description": "Airflow connection ID or dictionary representing a connection",
+          "description": "Airflow connection ID, or an inline connection validated against the schema selected by its `conn_type`",
           "title": "Connection"
         },
         "location": {
@@ -66,7 +74,7 @@
     },
     "CSVLoadOptions": {
       "additionalProperties": false,
-      "description": "Options that control how CSV files are *read*.\n\nThese mirror DuckDB's `read_csv_auto` parameters we expose.\nAll fields are optional; unset values defer to DuckDB defaults.\n\nAttributes:\n----------\ncolumns\n    Optional mapping of column names to logical types\n    (e.g. {\"id\": \"INTEGER\", \"amount\": \"DOUBLE\"}) used to override\n    DuckDB's type inference when auto-detect is not good enough.\nsep\n    Field separator (e.g. \",\", \"|\", \"\\t\"). If None, DuckDB will try to detect it.\nheader\n    Whether the first row contains column names. If None, DuckDB will detect.\nsample_size\n    Number of rows to sample for schema detection. If None, DuckDB default applies.\nall_varchar\n    If True, read all columns as VARCHAR (string). Useful when types are messy.",
+      "description": "Options that control how CSV files are *read*.\n\nThese mirror the DuckDB `read_csv` parameters we expose.\nAll fields are optional; unset values defer to DuckDB defaults.\n\nAttributes:\n    columns: Optional mapping of column names to logical types\n        (e.g. {\"id\": \"INTEGER\", \"amount\": \"DOUBLE\"}) used to override\n        DuckDB's type inference when auto-detect is not good enough.\n    sep: Field separator (e.g. \",\", \"|\", \"\\t\"). If None, DuckDB will try\n        to detect it.\n    header: Whether the first row contains column names. If None, DuckDB\n        will detect it.\n    sample_size: Number of rows to sample for schema detection. If None,\n        the DuckDB default applies.\n    all_varchar: If True, read all columns as VARCHAR (string). Useful\n        when types are messy.",
       "properties": {
         "columns": {
           "anyOf": [
@@ -142,7 +150,7 @@
     },
     "CSVSaveOptions": {
       "additionalProperties": false,
-      "description": "Options that control how CSV files are *written*.\n\nAttributes:\n----------\nheader\n    Whether to write a header row with column names.\nsep\n    Field separator to use when writing (e.g. ',', '|', '\\t').\noverwrite\n    If True, allow overwriting existing files at the destination.\n    Compression is *inferred from the file extension* ('.gz', '.zst', \u2026).",
+      "description": "Options that control how CSV files are *written*.\n\nAttributes:\n    header: Whether to write a header row with column names.\n    sep: Field separator to use when writing (e.g. ',', '|', '\\t').\n    overwrite: If True, allow overwriting existing files at the\n        destination. Compression is *inferred from the file extension*\n        ('.gz', '.zst', \u2026).",
       "properties": {
         "header": {
           "anyOf": [
@@ -197,17 +205,25 @@
               "type": "string"
             },
             {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "$ref": "#/$defs/LocalFsConnectionSchema"
-            },
-            {
-              "$ref": "#/$defs/GoogleCloudPlatformConnectionSchema"
+              "discriminator": {
+                "mapping": {
+                  "fs": "#/$defs/LocalFsConnectionSchema",
+                  "google": "#/$defs/GoogleCloudPlatformConnectionSchema",
+                  "google_cloud_platform": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                },
+                "propertyName": "conn_type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/LocalFsConnectionSchema"
+                },
+                {
+                  "$ref": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                }
+              ]
             }
           ],
-          "description": "Airflow connection ID or dictionary representing a connection",
+          "description": "Airflow connection ID, or an inline connection validated against the schema selected by its `conn_type`",
           "title": "Connection"
         },
         "location": {
@@ -353,17 +369,25 @@
               "type": "string"
             },
             {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "$ref": "#/$defs/LocalFsConnectionSchema"
-            },
-            {
-              "$ref": "#/$defs/GoogleCloudPlatformConnectionSchema"
+              "discriminator": {
+                "mapping": {
+                  "fs": "#/$defs/LocalFsConnectionSchema",
+                  "google": "#/$defs/GoogleCloudPlatformConnectionSchema",
+                  "google_cloud_platform": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                },
+                "propertyName": "conn_type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/LocalFsConnectionSchema"
+                },
+                {
+                  "$ref": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                }
+              ]
             }
           ],
-          "description": "Airflow connection ID or dictionary representing a connection",
+          "description": "Airflow connection ID, or an inline connection validated against the schema selected by its `conn_type`",
           "title": "Connection"
         },
         "location": {
@@ -508,8 +532,48 @@
       "type": "object"
     },
     "GoogleCloudPlatformConnectionExtraSchema": {
-      "description": "Extra options for a Google Cloud Storage-style connection.\n\nExactly one of the key sources may be provided, depending on how\ncredentials are supplied.\n\nAttributes:\n    keyfile_dict: Service account credentials as a mapping (already-parsed\n        JSON). Useful when credentials are injected as structured data.\n    keyfile: Service account credentials as a raw JSON string.\n    key_path: Filesystem path to a service account key file accessible at\n        runtime.",
+      "additionalProperties": false,
+      "description": "Extra options for a Google Cloud Storage-style connection.\n\nExactly one of the key sources may be provided, depending on how\ncredentials are supplied.\n\nAttributes:\n    keyfile_dict: Service account credentials as a mapping (already-parsed\n        JSON). Useful when credentials are injected as structured data.\n    keyfile: Service account credentials as a raw JSON string.\n    key_path: Filesystem path to a service account key file accessible at\n        runtime.\n    base_uri: Explicit base URI (for example `gs://bucket/prefix`). Takes\n        precedence over `bucket` and `prefix`.\n    bucket: Bucket name used to build the base URI.\n    prefix: Optional path inside the bucket, appended to the bucket.",
       "properties": {
+        "base_uri": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit base URI. Takes precedence over 'bucket' and 'prefix'.",
+          "title": "Base Uri"
+        },
+        "bucket": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Bucket name used to build the base URI (gs://bucket).",
+          "title": "Bucket"
+        },
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional path inside the bucket, appended to the base URI.",
+          "title": "Prefix"
+        },
         "keyfile_dict": {
           "anyOf": [
             {
@@ -555,7 +619,8 @@
       "type": "object"
     },
     "GoogleCloudPlatformConnectionSchema": {
-      "description": "Google Cloud Storage-style connection.\n\nDescribes access to objects stored in a GCS-compatible bucket. Credentials\ncan be provided via a parsed dictionary, raw JSON, or a file path.\n\nAttributes:\n    conn_type: Constant discriminator for this connection type\n        (`\"google_cloud_platform\"`).\n    extra: Provider-specific options, including credential sources.",
+      "additionalProperties": false,
+      "description": "Google Cloud Storage-style connection.\n\nDescribes access to objects stored in a GCS-compatible bucket. Credentials\ncan be provided via a parsed dictionary, raw JSON, or a file path.\n\nAttributes:\n    conn_type: Discriminator for this connection type\n        (`\"google_cloud_platform\"`, or its alias `\"google\"`).\n    extra: Provider-specific options, including credential sources.",
       "properties": {
         "host": {
           "anyOf": [
@@ -610,9 +675,12 @@
           "title": "Password"
         },
         "conn_type": {
-          "const": "google_cloud_platform",
           "default": "google_cloud_platform",
-          "description": "Connection type discriminator. Always \"google_cloud_platform\" for this provider.",
+          "description": "Connection type discriminator: \"google_cloud_platform\" or its alias \"google\".",
+          "enum": [
+            "google_cloud_platform",
+            "google"
+          ],
           "title": "Conn Type",
           "type": "string"
         },
@@ -633,21 +701,41 @@
       "type": "object"
     },
     "LocalFsConnectionExtraSchema": {
-      "description": "Extra options for a local filesystem connection.\n\nAttributes:\n    base_path: Absolute base path on the local filesystem used to resolve\n        relative dataset or resource paths.",
+      "additionalProperties": false,
+      "description": "Extra options for a local filesystem connection.\n\nBoth keys are optional. Without either of them, dataset locations are\nresolved relative to the current working directory.\n\nAttributes:\n    base_path: Base path on the local filesystem used to resolve relative\n        dataset or resource paths.\n    base_uri: Explicit base URI (for example `file:///data`). Takes\n        precedence over `base_path`.",
       "properties": {
         "base_path": {
-          "description": "Absolute base path on the local filesystem used to resolve relative dataset or resource paths.",
-          "title": "Base Path",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Base path on the local filesystem used to resolve relative dataset or resource paths.",
+          "title": "Base Path"
+        },
+        "base_uri": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit base URI. Takes precedence over 'base_path'.",
+          "title": "Base Uri"
         }
       },
-      "required": [
-        "base_path"
-      ],
       "title": "LocalFsConnectionExtraSchema",
       "type": "object"
     },
     "LocalFsConnectionSchema": {
+      "additionalProperties": false,
       "description": "Local filesystem connection.\n\nDescribes access to data stored on the same machine or mounted volumes.\n\nAttributes:\n    conn_type: Constant discriminator for this connection type (`\"fs\"`).\n    extra: Local filesystem-specific configuration (e.g., base path).",
       "properties": {
         "host": {
@@ -735,17 +823,25 @@
               "type": "string"
             },
             {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "$ref": "#/$defs/LocalFsConnectionSchema"
-            },
-            {
-              "$ref": "#/$defs/GoogleCloudPlatformConnectionSchema"
+              "discriminator": {
+                "mapping": {
+                  "fs": "#/$defs/LocalFsConnectionSchema",
+                  "google": "#/$defs/GoogleCloudPlatformConnectionSchema",
+                  "google_cloud_platform": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                },
+                "propertyName": "conn_type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/LocalFsConnectionSchema"
+                },
+                {
+                  "$ref": "#/$defs/GoogleCloudPlatformConnectionSchema"
+                }
+              ]
             }
           ],
-          "description": "Airflow connection ID or dictionary representing a connection",
+          "description": "Airflow connection ID, or an inline connection validated against the schema selected by its `conn_type`",
           "title": "Connection"
         },
         "location": {

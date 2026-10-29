@@ -13,7 +13,7 @@ are compatible with :class:`ConnectionProtocol`.
 import json
 from typing import Literal, Protocol
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ConnectionProtocol(Protocol):
@@ -114,6 +114,8 @@ class BaseConnectionSchema(BaseModel):
         password: Secret or token associated with the identity; optional.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     host: str | None = Field(
         None,
         description=(
@@ -141,17 +143,28 @@ class BaseConnectionSchema(BaseModel):
 class LocalFsConnectionExtraSchema(BaseModel):
     """Extra options for a local filesystem connection.
 
+    Both keys are optional. Without either of them, dataset locations are
+    resolved relative to the current working directory.
+
     Attributes:
-        base_path: Absolute base path on the local filesystem used to resolve
-            relative dataset or resource paths.
+        base_path: Base path on the local filesystem used to resolve relative
+            dataset or resource paths.
+        base_uri: Explicit base URI (for example `file:///data`). Takes
+            precedence over `base_path`.
     """
 
-    base_path: str = Field(
-        ...,
+    model_config = ConfigDict(extra="forbid")
+
+    base_path: str | None = Field(
+        None,
         description=(
-            "Absolute base path on the local filesystem used to resolve "
-            "relative dataset or resource paths."
+            "Base path on the local filesystem used to resolve relative "
+            "dataset or resource paths."
         ),
+    )
+    base_uri: str | None = Field(
+        None,
+        description="Explicit base URI. Takes precedence over 'base_path'.",
     )
 
 
@@ -187,8 +200,26 @@ class GoogleCloudPlatformConnectionExtraSchema(BaseModel):
         keyfile: Service account credentials as a raw JSON string.
         key_path: Filesystem path to a service account key file accessible at
             runtime.
+        base_uri: Explicit base URI (for example `gs://bucket/prefix`). Takes
+            precedence over `bucket` and `prefix`.
+        bucket: Bucket name used to build the base URI.
+        prefix: Optional path inside the bucket, appended to the bucket.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
+    base_uri: str | None = Field(
+        None,
+        description="Explicit base URI. Takes precedence over 'bucket' and 'prefix'.",
+    )
+    bucket: str | None = Field(
+        None,
+        description="Bucket name used to build the base URI (gs://bucket).",
+    )
+    prefix: str | None = Field(
+        None,
+        description="Optional path inside the bucket, appended to the base URI.",
+    )
     keyfile_dict: dict | None = Field(
         None,
         description=(
@@ -219,16 +250,16 @@ class GoogleCloudPlatformConnectionSchema(BaseConnectionSchema):
     can be provided via a parsed dictionary, raw JSON, or a file path.
 
     Attributes:
-        conn_type: Constant discriminator for this connection type
-            (`"google_cloud_platform"`).
+        conn_type: Discriminator for this connection type
+            (`"google_cloud_platform"`, or its alias `"google"`).
         extra: Provider-specific options, including credential sources.
     """
 
-    conn_type: Literal["google_cloud_platform"] = Field(
+    conn_type: Literal["google_cloud_platform", "google"] = Field(
         "google_cloud_platform",
         description=(
-            'Connection type discriminator. Always "google_cloud_platform" '
-            "for this provider."
+            'Connection type discriminator: "google_cloud_platform" or its '
+            'alias "google".'
         ),
     )
     extra: GoogleCloudPlatformConnectionExtraSchema | None = Field(

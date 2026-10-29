@@ -42,15 +42,22 @@ class EntryBase(BaseModel, ABC):
     """Base configuration shared by all catalog entries.
 
     Attributes:
-        connection: Airflow connection ID (string) **or** a dict representing
-            the connection configuration (e.g., credentials, file path, etc.).
+        connection: Airflow connection ID (string) **or** an inline connection
+            mapping. A mapping is validated against the schema chosen by its
+            `conn_type` (`fs`, `google_cloud_platform`), so unknown types and
+            unknown keys are rejected.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    connection: str | dict | SupportedConnectionSchemas = Field(
+    connection: (
+        str | Annotated[SupportedConnectionSchemas, Field(discriminator="conn_type")]
+    ) = Field(
         ...,
-        description="Airflow connection ID or dictionary representing a connection",
+        description=(
+            "Airflow connection ID, or an inline connection validated against "
+            "the schema selected by its `conn_type`"
+        ),
     )
     location: str = Field(..., description="Relative location of data")
 
@@ -59,8 +66,8 @@ class EntryBase(BaseModel, ABC):
 
         If `connection` is a string, it is treated as an Airflow connection ID
         and resolved via `BaseHook.get_connection` (compatible with Airflow 2 and 3).
-        If `connection` is already a mapping/object implementing the connection
-        protocol, it is returned as-is.
+        An inline connection is returned as a plain dictionary without the
+        fields that were left unset.
 
         Returns:
             dict | ConnectionProtocol: A resolved connection object or dictionary
@@ -72,9 +79,7 @@ class EntryBase(BaseModel, ABC):
                 msg = "Airflow is required to resolve a connection by its ID."
                 raise ImportError(msg)
             return base_hook.get_connection(conn_id=self.connection)
-        if isinstance(self.connection, SupportedConnectionSchemas):
-            return self.connection.model_dump(by_alias=True)
-        return self.connection
+        return self.connection.model_dump(by_alias=True, exclude_none=True)
 
     @abstractmethod
     def build_dataset(self) -> "BaseDataset":
