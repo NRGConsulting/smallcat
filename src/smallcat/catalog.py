@@ -8,10 +8,10 @@ catalog from a dictionary (which could be in an airflow variable).
 import typing
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from smallcat._airflow import get_base_hook
 from smallcat.connections import ConnectionProtocol, SupportedConnectionSchemas
@@ -45,6 +45,8 @@ class EntryBase(BaseModel, ABC):
         connection: Airflow connection ID (string) **or** a dict representing
             the connection configuration (e.g., credentials, file path, etc.).
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     connection: str | dict | SupportedConnectionSchemas = Field(
         ...,
@@ -183,8 +185,8 @@ class CSVEntry(EntryBase):
     """
 
     file_format: Literal["csv"] = "csv"
-    load_options: CSVLoadOptions | None
-    save_options: CSVSaveOptions | None
+    load_options: CSVLoadOptions | None = None
+    save_options: CSVSaveOptions | None = None
 
     def build_dataset(self) -> CSVDataset:
         """Build a :class:`CSVDataset` using this entry's configuration.
@@ -209,8 +211,8 @@ class ExcelEntry(EntryBase):
     """
 
     file_format: Literal["excel"] = "excel"
-    load_options: ExcelLoadOptions | None
-    save_options: ExcelSaveOptions | None
+    load_options: ExcelLoadOptions | None = None
+    save_options: ExcelSaveOptions | None = None
 
     def build_dataset(self) -> ExcelDataset:
         """Build an :class:`ExcelDataset` using this entry's configuration.
@@ -237,8 +239,8 @@ class ParquetEntry(EntryBase):
     """
 
     file_format: Literal["parquet"] = "parquet"
-    load_options: ParquetLoadOptions | None
-    save_options: ParquetSaveOptions | None
+    load_options: ParquetLoadOptions | None = None
+    save_options: ParquetSaveOptions | None = None
 
     def build_dataset(self) -> ParquetDataset:
         """Build a :class:`ParquetDataset` using this entry's configuration.
@@ -270,8 +272,8 @@ class DeltaTableEntry(EntryBase):
     """
 
     file_format: Literal["delta_table"] = "delta_table"
-    load_options: DeltaTableLoadOptions | None
-    save_options: DeltaTableSaveOptions | None
+    load_options: DeltaTableLoadOptions | None = None
+    save_options: DeltaTableSaveOptions | None = None
 
     def build_dataset(self) -> DeltaTableDataset:
         """Build a :class:`DeltaTableDataset` using this entry's configuration.
@@ -301,7 +303,12 @@ class Catalog(BaseModel):
         entries: Mapping of dataset names to their configurations.
     """
 
-    entries: dict[str, CatalogEntry] = Field(
+    model_config = ConfigDict(extra="forbid")
+
+    entries: dict[
+        str,
+        Annotated[CatalogEntry, Field(discriminator="file_format")],
+    ] = Field(
         ...,
         description="Named data sets",
     )

@@ -31,7 +31,7 @@ from enum import StrEnum
 
 import pyarrow as pa
 from deltalake import DeltaTable, write_deltalake
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from smallcat.datasets.base_dataset import BaseDataset
 
@@ -54,6 +54,8 @@ class DeltaTableLoadOptions(BaseModel):
       without_files: If True, skip listing data files (metadata-only read).
       log_buffer_size: Buffer size for reading Delta logs.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     version: int | None = Field(None)
     without_files: bool | None = Field(None)
@@ -83,6 +85,8 @@ class DeltaTableSaveOptions(BaseModel):
       partition_by: Columns to partition by (Hive-style directory layout).
       schema_mode: Strategy to reconcile schema differences during write.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     mode: WriteMode | None = Field(None, description="Write mode for existing tables.")
     partition_by: list[str] | None = Field(

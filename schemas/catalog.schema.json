@@ -1,6 +1,7 @@
 {
   "$defs": {
     "CSVEntry": {
+      "additionalProperties": false,
       "description": "Catalog entry describing a CSV dataset.\n\nAttributes:\n    file_format: Literal string identifying the file format: `'csv'`.\n    load_options: Options controlling CSV *reading* (see `CSVLoadOptions`).\n    save_options: Options controlling CSV *writing* (see `CSVSaveOptions`).",
       "properties": {
         "connection": {
@@ -41,7 +42,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "save_options": {
           "anyOf": [
@@ -51,19 +53,19 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "required": [
         "connection",
-        "location",
-        "load_options",
-        "save_options"
+        "location"
       ],
       "title": "CSVEntry",
       "type": "object"
     },
     "CSVLoadOptions": {
+      "additionalProperties": false,
       "description": "Options that control how CSV files are *read*.\n\nThese mirror DuckDB's `read_csv_auto` parameters we expose.\nAll fields are optional; unset values defer to DuckDB defaults.\n\nAttributes:\n----------\ncolumns\n    Optional mapping of column names to logical types\n    (e.g. {\"id\": \"INTEGER\", \"amount\": \"DOUBLE\"}) used to override\n    DuckDB's type inference when auto-detect is not good enough.\nsep\n    Field separator (e.g. \",\", \"|\", \"\\t\"). If None, DuckDB will try to detect it.\nheader\n    Whether the first row contains column names. If None, DuckDB will detect.\nsample_size\n    Number of rows to sample for schema detection. If None, DuckDB default applies.\nall_varchar\n    If True, read all columns as VARCHAR (string). Useful when types are messy.",
       "properties": {
         "columns": {
@@ -139,6 +141,7 @@
       "type": "object"
     },
     "CSVSaveOptions": {
+      "additionalProperties": false,
       "description": "Options that control how CSV files are *written*.\n\nAttributes:\n----------\nheader\n    Whether to write a header row with column names.\nsep\n    Field separator to use when writing (e.g. ',', '|', '\\t').\noverwrite\n    If True, allow overwriting existing files at the destination.\n    Compression is *inferred from the file extension* ('.gz', '.zst', \u2026).",
       "properties": {
         "header": {
@@ -185,6 +188,7 @@
       "type": "object"
     },
     "DeltaTableEntry": {
+      "additionalProperties": false,
       "description": "Catalog entry describing a Delta Lake table dataset.\n\nThis entry specifies configuration for reading from or writing to Delta\nLake tables, typically stored on local or cloud-backed storage. It includes\nboth connection details and Delta-specific load/save options.\n\nAttributes:\n    file_format: Literal string identifying the file format: `'delta_table'`.\n    load_options: Optional configuration controlling Delta table *reading*\n        behavior (see :class:`DeltaTableLoadOptions`).\n    save_options: Optional configuration controlling Delta table *writing*\n        behavior (see :class:`DeltaTableSaveOptions`).",
       "properties": {
         "connection": {
@@ -225,7 +229,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "save_options": {
           "anyOf": [
@@ -235,19 +240,19 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "required": [
         "connection",
-        "location",
-        "load_options",
-        "save_options"
+        "location"
       ],
       "title": "DeltaTableEntry",
       "type": "object"
     },
     "DeltaTableLoadOptions": {
+      "additionalProperties": false,
       "description": "Options controlling how a Delta table is read.\n\nAttributes:\n  version: Optional table version to read.\n  without_files: If True, skip listing data files (metadata-only read).\n  log_buffer_size: Buffer size for reading Delta logs.",
       "properties": {
         "version": {
@@ -291,6 +296,7 @@
       "type": "object"
     },
     "DeltaTableSaveOptions": {
+      "additionalProperties": false,
       "description": "Options controlling how a Delta table is written.\n\nAttributes:\n  mode: Write mode to apply if the table exists.\n  partition_by: Columns to partition by (Hive-style directory layout).\n  schema_mode: Strategy to reconcile schema differences during write.",
       "properties": {
         "mode": {
@@ -338,6 +344,7 @@
       "type": "object"
     },
     "ExcelEntry": {
+      "additionalProperties": false,
       "description": "Catalog entry describing an Excel dataset.\n\nAttributes:\n    file_format: Literal string identifying the file format: `'excel'`.\n    load_options: Options controlling Excel *reading* (see `ExcelLoadOptions`).\n    save_options: Options controlling Excel *writing* (see `ExcelSaveOptions`).",
       "properties": {
         "connection": {
@@ -378,7 +385,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "save_options": {
           "anyOf": [
@@ -388,19 +396,19 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "required": [
         "connection",
-        "location",
-        "load_options",
-        "save_options"
+        "location"
       ],
       "title": "ExcelEntry",
       "type": "object"
     },
     "ExcelLoadOptions": {
+      "additionalProperties": false,
       "description": "Options that control how an .xlsx file is read.\n\nAttributes:\n  header: If True, treat the first row as column headers.\n  sheet: Optional worksheet name to read. If omitted, the first sheet is used.\n  range: Excel A1-style range to read (e.g., \"A1:D100\").\n         If omitted, the full sheet is read.\n  all_varchar: If True, coerce all columns to VARCHAR (strings).\n  empty_as_varchar: If True, treat empty columns as VARCHAR instead of NULL/typed.",
       "properties": {
         "header": {
@@ -468,6 +476,7 @@
       "type": "object"
     },
     "ExcelSaveOptions": {
+      "additionalProperties": false,
       "description": "Options that control how an Arrow table is written to .xlsx.\n\nAttributes:\n  header: If True, include column headers in the output file.\n  sheet: Optional worksheet name to write into (created if missing).",
       "properties": {
         "header": {
@@ -499,7 +508,7 @@
       "type": "object"
     },
     "GoogleCloudPlatformConnectionExtraSchema": {
-      "description": "Extra options for a Google Cloud Storage\u2013style connection.\n\nExactly one of the key sources may be provided, depending on how\ncredentials are supplied.\n\nAttributes:\n    keyfile_dict: Service account credentials as a mapping (already-parsed\n        JSON). Useful when credentials are injected as structured data.\n    keyfile: Service account credentials as a raw JSON string.\n    key_path: Filesystem path to a service account key file accessible at\n        runtime.",
+      "description": "Extra options for a Google Cloud Storage-style connection.\n\nExactly one of the key sources may be provided, depending on how\ncredentials are supplied.\n\nAttributes:\n    keyfile_dict: Service account credentials as a mapping (already-parsed\n        JSON). Useful when credentials are injected as structured data.\n    keyfile: Service account credentials as a raw JSON string.\n    key_path: Filesystem path to a service account key file accessible at\n        runtime.",
       "properties": {
         "keyfile_dict": {
           "anyOf": [
@@ -546,7 +555,7 @@
       "type": "object"
     },
     "GoogleCloudPlatformConnectionSchema": {
-      "description": "Google Cloud Storage\u2013style connection.\n\nDescribes access to objects stored in a GCS-compatible bucket. Credentials\ncan be provided via a parsed dictionary, raw JSON, or a file path.\n\nAttributes:\n    conn_type: Constant discriminator for this connection type\n        (``\"google_cloud_platform\"``).\n    extra: Provider-specific options, including credential sources.",
+      "description": "Google Cloud Storage-style connection.\n\nDescribes access to objects stored in a GCS-compatible bucket. Credentials\ncan be provided via a parsed dictionary, raw JSON, or a file path.\n\nAttributes:\n    conn_type: Constant discriminator for this connection type\n        (`\"google_cloud_platform\"`).\n    extra: Provider-specific options, including credential sources.",
       "properties": {
         "host": {
           "anyOf": [
@@ -571,7 +580,7 @@
             }
           ],
           "default": null,
-          "description": "Logical schema, namespace, or protocol segment associated with the connection (e.g., database name, URI scheme).",
+          "description": "Logical schema / namespace / protocol segment.",
           "title": "Schema"
         },
         "login": {
@@ -639,7 +648,7 @@
       "type": "object"
     },
     "LocalFsConnectionSchema": {
-      "description": "Local filesystem connection.\n\nDescribes access to data stored on the same machine or mounted volumes.\n\nAttributes:\n    conn_type: Constant discriminator for this connection type (``\"fs\"``).\n    extra: Local filesystem\u2013specific configuration (e.g., base path).",
+      "description": "Local filesystem connection.\n\nDescribes access to data stored on the same machine or mounted volumes.\n\nAttributes:\n    conn_type: Constant discriminator for this connection type (`\"fs\"`).\n    extra: Local filesystem-specific configuration (e.g., base path).",
       "properties": {
         "host": {
           "anyOf": [
@@ -664,7 +673,7 @@
             }
           ],
           "default": null,
-          "description": "Logical schema, namespace, or protocol segment associated with the connection (e.g., database name, URI scheme).",
+          "description": "Logical schema / namespace / protocol segment.",
           "title": "Schema"
         },
         "login": {
@@ -717,6 +726,7 @@
       "type": "object"
     },
     "ParquetEntry": {
+      "additionalProperties": false,
       "description": "Catalog entry describing a Parquet dataset.\n\nAttributes:\n    file_format: Literal string identifying the file format: `'parquet'`.\n    load_options: Optional configuration controlling Parquet *reading*\n        behavior (see :class:`ParquetLoadOptions`).\n    save_options: Optional configuration controlling Parquet *writing*\n        behavior (see :class:`ParquetSaveOptions`).",
       "properties": {
         "connection": {
@@ -757,7 +767,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "save_options": {
           "anyOf": [
@@ -767,19 +778,19 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "required": [
         "connection",
-        "location",
-        "load_options",
-        "save_options"
+        "location"
       ],
       "title": "ParquetEntry",
       "type": "object"
     },
     "ParquetLoadOptions": {
+      "additionalProperties": false,
       "description": "Options that control how Parquet is read via DuckDB.\n\nAttributes:\n  binary_as_string: If True, interpret BINARY columns as strings.\n  file_row_number: If True, include a synthetic row-number column per file.\n  hive_partitioning: If True, parse Hive-style directory partitions.\n  union_by_name: If True, align/union schemas by column name across files.",
       "properties": {
         "binary_as_string": {
@@ -835,6 +846,7 @@
       "type": "object"
     },
     "ParquetSaveOptions": {
+      "additionalProperties": false,
       "description": "Options that control how Parquet is written via DuckDB.\n\nAttributes:\n  overwrite: If True, overwrite existing output.\n  partition_by: Columns to partition by (Hive-style layout).\n  write_partition_columns: If True, also materialize partition cols in files.",
       "properties": {
         "overwrite": {
@@ -900,11 +912,21 @@
       "type": "string"
     }
   },
+  "additionalProperties": false,
   "description": "A collection of named datasets with associated loader configuration.\n\nThe catalog maps user-defined keys to concrete dataset entries (e.g., CSV or\nExcel). It can be constructed from an in-memory dictionary, an Airflow\nVariable (JSON), or a YAML file.\n\nAttributes:\n    entries: Mapping of dataset names to their configurations.",
   "properties": {
     "entries": {
       "additionalProperties": {
-        "anyOf": [
+        "discriminator": {
+          "mapping": {
+            "csv": "#/$defs/CSVEntry",
+            "delta_table": "#/$defs/DeltaTableEntry",
+            "excel": "#/$defs/ExcelEntry",
+            "parquet": "#/$defs/ParquetEntry"
+          },
+          "propertyName": "file_format"
+        },
+        "oneOf": [
           {
             "$ref": "#/$defs/CSVEntry"
           },

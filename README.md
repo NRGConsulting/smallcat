@@ -42,7 +42,7 @@ entries:
             conn_type: google_cloud_platform
             extra:
                 bucket: my-bucket
-        location: bar.csv
+        location: bar.parquet
         save_options:
             partition_by:
                 - year
@@ -52,9 +52,9 @@ entries:
 ### Standalone
 
 ```python
-from smallcat import Catalog
+from smallcat.catalog import Catalog
 
-catalog = Catalog.from_path("catalog.yaml")
+catalog = Catalog.from_yaml("catalog.yaml")
 catalog.save_pandas("foo", df)
 df2 = catalog.load_pandas("foo")
 ```
@@ -74,11 +74,17 @@ df = catalog.load_pandas(
 
 ### With Airflow
 ```python
-from smallcat import Catalog
+from smallcat.catalog import Catalog
 
 catalog = Catalog.from_airflow_variable("example_catalog")
 df = catalog.load_pandas("bar")
 ```
+
+## Catalog reference
+
+`load_options` and `save_options` are optional, `file_format` is required and unknown
+keys are rejected. See the [catalog reference](https://nrgconsulting.github.io/smallcat/catalog-reference/)
+for every option, the validation rules and the credentials each format uses.
 
 ## Docs
 Read more at [the official docs](https://nrgconsulting.github.io/smallcat/).

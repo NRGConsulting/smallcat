@@ -21,7 +21,7 @@ Related options:
 """
 
 import pyarrow as pa
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from smallcat.datasets.base_dataset import BaseDataset
 
@@ -35,6 +35,8 @@ class ParquetLoadOptions(BaseModel):
       hive_partitioning: If True, parse Hive-style directory partitions.
       union_by_name: If True, align/union schemas by column name across files.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     binary_as_string: bool | None = Field(None)
     file_row_number: bool | None = Field(None)
@@ -50,6 +52,8 @@ class ParquetSaveOptions(BaseModel):
       partition_by: Columns to partition by (Hive-style layout).
       write_partition_columns: If True, also materialize partition cols in files.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     overwrite: bool | None = Field(None)
     partition_by: list[str] | None = Field(None)
