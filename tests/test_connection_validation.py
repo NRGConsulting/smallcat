@@ -11,6 +11,7 @@ from smallcat.connections import (
     LocalFsConnectionSchema,
 )
 from smallcat.datasets.csv_dataset import CSVDataset
+from smallcat.path_utils import to_file_uri
 
 
 def _entry(connection: object) -> CSVEntry:
@@ -67,8 +68,9 @@ def test_validated_fs_connection_resolves_base_uri(tmp_path: Path) -> None:
     base = tmp_path.as_posix()
     by_path = _entry({"conn_type": "fs", "extra": {"base_path": base}})
     by_uri = _entry({"conn_type": "fs", "extra": {"base_uri": f"file://{base}"}})
-    assert CSVDataset(conn=by_path.get_connection()).base_uri == f"file://{base}"
-    assert CSVDataset(conn=by_uri.get_connection()).base_uri == f"file://{base}"
+    expected = to_file_uri(base)
+    assert CSVDataset(conn=by_path.get_connection()).base_uri == expected
+    assert CSVDataset(conn=by_uri.get_connection()).base_uri == expected
     bare = _entry({"conn_type": "fs"}).get_connection()
     assert CSVDataset(conn=bare).base_uri is None
 

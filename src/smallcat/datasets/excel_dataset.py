@@ -115,6 +115,7 @@ class ExcelDataset(BaseDataset[ExcelLoadOptions, ExcelSaveOptions]):
           `excel` extension. Save-time options are translated into COPY options.
         """
         full_uri = self._full_uri(path)
+        self._ensure_parent_dir(full_uri)
         with self._duckdb_conn() as con:
             ensure_extension(con, "excel")
             lo = self.save_options_dict()

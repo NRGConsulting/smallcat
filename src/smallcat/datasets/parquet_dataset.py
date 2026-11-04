@@ -98,6 +98,7 @@ class ParquetDataset(BaseDataset[ParquetLoadOptions, ParquetSaveOptions]):
           `save_options_dict()`.
         """
         full_uri = self._full_uri(path)
+        self._ensure_parent_dir(full_uri)
         with self._duckdb_conn() as con:
             con.register("tmp_input", table)
             con.sql("SELECT * FROM tmp_input").write_parquet(

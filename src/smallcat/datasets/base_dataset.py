@@ -45,7 +45,13 @@ from smallcat.connections import (
     validate_aws_credentials,
     validate_gcp_credentials,
 )
-from smallcat.path_utils import norm_join_uri, to_relative_posix_path
+from smallcat.path_utils import (
+    local_path_from_uri,
+    norm_join_uri,
+    normalize_file_uri,
+    to_file_uri,
+    to_relative_posix_path,
+)
 
 # Credential chain used when DuckDB's default one fails: no `config` provider.
 AWS_FALLBACK_CHAIN = "env;sso;process;web_identity;instance"
@@ -161,9 +167,9 @@ class BaseDataset(ABC, Generic[L, S]):
           load_options: Optional Pydantic model with load configuration.
           save_options: Optional Pydantic model with save configuration.
 
-        Side Effects:
-          May create a local directory if the inferred base URI is a
-          `file://` path that does not exist.
+        Note:
+          The constructor has no side effects on the filesystem: local
+          directories are created when saving, not when instantiating.
 
         """
         if isinstance(conn, dict):
@@ -175,8 +181,6 @@ class BaseDataset(ABC, Generic[L, S]):
         #  fallback to extras["base_path"] for local paths.
         # For GCP, prefer extras["base_uri"]; else build from bucket: gs://{bucket}
         self.base_uri = self._infer_base_uri()
-        if self.base_uri and self.base_uri.startswith("file://"):
-            Path(self.base_uri[len("file://") :]).mkdir(exist_ok=True)
 
         self.load_options = load_options
         self.save_options = save_options
@@ -357,6 +361,17 @@ class BaseDataset(ABC, Generic[L, S]):
             return to_relative_posix_path(rel_path)
         return norm_join_uri(self.base_uri, rel_path)
 
+    @staticmethod
+    def _ensure_parent_dir(full_uri: str) -> None:
+        """Create the parent directory of a local destination before writing.
+
+        Remote URIs (`gs://`, `s3://`, ...) are left alone: object stores have no
+        directories to create.
+        """
+        local = local_path_from_uri(full_uri)
+        if local:
+            Path(local).parent.mkdir(parents=True, exist_ok=True)
+
     def _select_clause(self, columns: list[str] | None) -> str:
         """Return a sanitized SELECT clause for DuckDB queries.
 
@@ -451,14 +466,14 @@ class BaseDataset(ABC, Generic[L, S]):
 
         if ctype == "fs":
             if x.get("base_uri"):
-                return x["base_uri"]
+                return normalize_file_uri(x["base_uri"])
             # allow local base path
             base_path = x.get("base_path")
             if base_path:
                 # Normalize to file:// for consistency
                 if re.match(r"^[a-zA-Z0-9+.-]+://", base_path):
-                    return base_path
-                return f"file://{base_path}"
+                    return normalize_file_uri(base_path)
+                return to_file_uri(base_path)
             # No base: paths stay relative to the current working directory.
             return None
 

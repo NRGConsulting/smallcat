@@ -76,7 +76,10 @@ def norm_join_uri(base_uri: str, rel: str) -> str:
     """
     m = re.match(r"^(?P<scheme>[a-zA-Z0-9+.-]+)://(?P<body>.*)$", base_uri)
     if not m:
-        # Treat as local path base (no scheme present).
+        # Treat as local path base (no scheme present). Windows separators are
+        # converted so the result does not mix `\` and `/`.
+        if is_windows_path(base_uri):
+            base_uri = base_uri.replace("\\", "/")
         return posixpath.join(base_uri.rstrip("/"), _safe_relative(rel))
     scheme, body = m.group("scheme"), m.group("body")
     if body == "" and scheme == "file":
@@ -115,3 +118,58 @@ def to_relative_posix_path(path: str) -> str:
         'foo/bar'
     """
     return posixpath.join("", _safe_relative(path))
+
+
+_DRIVE_RE = re.compile(r"^[A-Za-z]:([\/]|$)")
+
+
+def is_windows_path(path: str) -> bool:
+    """Return True if `path` looks like a Windows path (drive letter or backslash)."""
+    return bool(_DRIVE_RE.match(path)) or "\\" in path
+
+
+def to_file_uri(path: str) -> str:
+    r"""Turn a local path into a ``file://`` URI that DuckDB accepts everywhere.
+
+    POSIX paths keep the historical ``file://{path}`` form. Windows paths
+    (``C:\data``, ``C:/data`` or ``\data``) are converted to forward slashes and
+    get an empty authority: ``file:///C:/data``. ``file://C:\data``, with a
+    drive letter in place of a host and mixed separators, is not valid.
+
+    Args:
+        path: Local filesystem path.
+
+    Returns:
+        The ``file://`` URI.
+
+    Examples:
+        >>> to_file_uri("/var/data")
+        'file:///var/data'
+        >>> to_file_uri(r"C:\Users\me\data")
+        'file:///C:/Users/me/data'
+    """
+    if not is_windows_path(path):
+        return f"file://{path}"
+    posix = path.replace("\\", "/")
+    return f"file:///{posix}" if _DRIVE_RE.match(posix) else f"file://{posix}"
+
+
+def normalize_file_uri(uri: str) -> str:
+    """Fix ``file://`` URIs written with a Windows path; leave the rest as is."""
+    if uri.startswith("file://") and is_windows_path(uri[len("file://") :]):
+        return to_file_uri(uri[len("file://") :])
+    return uri
+
+
+def local_path_from_uri(uri: str) -> str | None:
+    """Return the local filesystem path of `uri`, or None if it is remote.
+
+    Accepts ``file://`` URIs (including ``file:///C:/x``) and scheme-less paths.
+    """
+    if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]+://", uri):
+        if not uri.startswith("file://"):
+            return None
+        uri = uri[len("file://") :]
+        if re.match(r"^/[A-Za-z]:/", uri):  # file:///C:/x -> C:/x
+            return uri[1:]
+    return uri or None
