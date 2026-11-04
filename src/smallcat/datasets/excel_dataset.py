@@ -125,4 +125,4 @@ class ExcelDataset(BaseDataset[ExcelLoadOptions, ExcelSaveOptions]):
                 args_sql += f", SHEET {sql_string_literal(sheet)}"
             con.register("tmp_input", table)
             query = f"copy (select * from tmp_input) TO ? WITH (FORMAT xlsx{args_sql})"  # noqa: S608
-            con.execute(query, [full_uri]).fetch_arrow_table()
+            con.execute(query, [full_uri])
