@@ -14,7 +14,11 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from smallcat._airflow import AIRFLOW_INSTALL_HINT, get_base_hook
-from smallcat.connections import ConnectionProtocol, SupportedConnectionSchemas
+from smallcat.connections import (
+    ConnectionProtocol,
+    SupportedConnectionSchemas,
+    reveal_secrets,
+)
 from smallcat.datasets.base_dataset import BaseDataset
 from smallcat.datasets.csv_dataset import CSVDataset, CSVLoadOptions, CSVSaveOptions
 from smallcat.datasets.delta_table_dataset import (
@@ -82,7 +86,9 @@ class EntryBase(BaseModel, ABC):
                 )
                 raise ImportError(msg)
             return base_hook.get_connection(conn_id=self.connection)
-        return self.connection.model_dump(by_alias=True, exclude_none=True)
+        return reveal_secrets(
+            self.connection.model_dump(by_alias=True, exclude_none=True),
+        )
 
     @abstractmethod
     def build_dataset(self) -> "BaseDataset":
