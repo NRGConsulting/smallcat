@@ -28,7 +28,10 @@ def _json_to_text(value: Any) -> Any:  # noqa: ANN401
     return json.dumps(value) if isinstance(value, dict) else value
 
 
-SecretJson = Annotated[SecretStr, BeforeValidator(_json_to_text)]
+SecretJson = Annotated[
+    SecretStr,
+    BeforeValidator(_json_to_text, json_schema_input_type=str | dict),
+]
 """A secret that accepts a JSON string or a mapping (stored as JSON text)."""
 
 

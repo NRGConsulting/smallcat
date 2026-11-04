@@ -120,6 +120,27 @@ schema selected by its `conn_type`:
 Supported top-level keys are `conn_type`, `host`, `schema`, `login`, `password`
 and `extra`.
 
+### Secrets
+
+`password`, `aws_session_token`, `keyfile` and `keyfile_dict` are secret values.
+Once the catalog is loaded they are held as Pydantic `SecretStr`, so they do not
+appear in `repr()`, `str()`, logs, validation errors or `model_dump()`:
+
+```python
+entry = catalog.entries["raw"]
+entry.connection.password                       # SecretStr('**********')
+entry.connection.password.get_secret_value()    # the real value
+```
+
+* `entry.get_connection()` returns the plain values (it is what the datasets
+  receive, like an Airflow connection). Do not log its result.
+* `keyfile_dict` accepts a mapping or a JSON string; it is stored as JSON text.
+* A connection given by id is resolved by Airflow, which keeps its own
+  protection of the password.
+* The secrets are **not** encrypted at rest: in a YAML file or an Airflow
+  Variable they are plain text. Prefer an Airflow connection (or a secrets
+  backend) over an inline `connection` for real credentials.
+
 ### Local filesystem (`fs`)
 
 ```yaml

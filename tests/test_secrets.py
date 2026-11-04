@@ -64,3 +64,10 @@ def test_connection_like_repr_hides_secrets() -> None:
     )
     assert "AWS-SECRET" not in repr(conn)
     assert "EXTRA-VALUE" not in repr(conn)
+
+
+def test_json_schema_still_accepts_a_mapping_for_keyfile_dict() -> None:
+    schema = GoogleCloudPlatformConnectionSchema.model_json_schema()
+    extra = schema["$defs"]["GoogleCloudPlatformConnectionExtraSchema"]
+    kinds = {opt.get("type") for opt in extra["properties"]["keyfile_dict"]["anyOf"]}
+    assert {"object", "string"} <= kinds

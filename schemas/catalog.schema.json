@@ -85,7 +85,9 @@
         "aws_session_token": {
           "anyOf": [
             {
-              "type": "string"
+              "format": "password",
+              "type": "string",
+              "writeOnly": true
             },
             {
               "type": "null"
@@ -145,7 +147,9 @@
         "password": {
           "anyOf": [
             {
-              "type": "string"
+              "format": "password",
+              "type": "string",
+              "writeOnly": true
             },
             {
               "type": "null"
@@ -773,6 +777,9 @@
         "keyfile_dict": {
           "anyOf": [
             {
+              "type": "string"
+            },
+            {
               "additionalProperties": true,
               "type": "object"
             },
@@ -787,7 +794,9 @@
         "keyfile": {
           "anyOf": [
             {
-              "type": "string"
+              "format": "password",
+              "type": "string",
+              "writeOnly": true
             },
             {
               "type": "null"
@@ -860,7 +869,9 @@
         "password": {
           "anyOf": [
             {
-              "type": "string"
+              "format": "password",
+              "type": "string",
+              "writeOnly": true
             },
             {
               "type": "null"
@@ -976,7 +987,9 @@
         "password": {
           "anyOf": [
             {
-              "type": "string"
+              "format": "password",
+              "type": "string",
+              "writeOnly": true
             },
             {
               "type": "null"
