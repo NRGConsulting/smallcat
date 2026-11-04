@@ -152,6 +152,7 @@ class CSVDataset(BaseDataset[CSVLoadOptions, CSVSaveOptions]):
             duckdb.IOException: If the destination is not writable.
         """
         full_uri = self._full_uri(path)
+        self._ensure_parent_dir(full_uri)
         with self._duckdb_conn() as con:
             con.register("tmp_input", table)
             con.sql("SELECT * FROM tmp_input").write_csv(

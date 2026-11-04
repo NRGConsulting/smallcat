@@ -152,6 +152,13 @@ connection:
 
 `extra` is optional; both keys are optional too (see *Locations*).
 
+`base_path` and `base_uri` may be written as Windows paths (`C:\data`,
+`C:/data` or `file://C:\data`): they are normalized to `file:///C:/data`.
+
+Creating a dataset (or a catalog) never touches the filesystem. The directory of
+a destination, including nested ones such as `reports/2025/out.csv`, is created
+when the data is saved. `delta_table` entries leave that to delta-rs.
+
 ### Google Cloud Storage (`google_cloud_platform`)
 
 ```yaml
