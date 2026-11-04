@@ -11,9 +11,41 @@ are compatible with :class:`ConnectionProtocol`.
 """
 
 import json
-from typing import Literal, Protocol, Self
+from typing import Annotated, Any, Literal, Protocol, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    SecretStr,
+    model_validator,
+)
+
+
+def _json_to_text(value: Any) -> Any:  # noqa: ANN401
+    """Serialize a mapping to JSON so it can be held as a secret string."""
+    return json.dumps(value) if isinstance(value, dict) else value
+
+
+SecretJson = Annotated[SecretStr, BeforeValidator(_json_to_text)]
+"""A secret that accepts a JSON string or a mapping (stored as JSON text)."""
+
+
+def reveal_secrets(value: Any) -> Any:  # noqa: ANN401
+    """Return `value` with every :class:`~pydantic.SecretStr` unwrapped.
+
+    Walks dictionaries and lists. This is the single place where secrets leave
+    their protected wrapper, right before they are handed to a
+    :class:`ConnectionLike`, which mirrors Airflow's plain-text connections.
+    """
+    if isinstance(value, SecretStr):
+        return value.get_secret_value()
+    if isinstance(value, dict):
+        return {k: reveal_secrets(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [reveal_secrets(v) for v in value]
+    return value
 
 
 class ConnectionProtocol(Protocol):
@@ -86,6 +118,13 @@ class ConnectionLike(ConnectionProtocol):
             msg = f"`extra` must be a dict, a JSON string or None, got {type(extra)}"
             raise TypeError(msg)
 
+    def __repr__(self) -> str:
+        """Represent the connection without its password or `extra` contents."""
+        return (
+            f"ConnectionLike(conn_type={self.conn_type!r}, host={self.host!r}, "
+            f"schema={self.schema!r}, login={self.login!r}, password=***, extra=***)"
+        )
+
     @property
     def extra_dejson(self) -> dict:
         """Return `extra` parsed as JSON, or an empty dict if missing/empty.
@@ -134,7 +173,7 @@ class BaseConnectionSchema(BaseModel):
         None,
         description="Username or identity used for authentication.",
     )
-    password: str | None = Field(
+    password: SecretStr | None = Field(
         None,
         description="Secret or token used for authentication (keep secure).",
     )
@@ -194,7 +233,7 @@ GCP_SERVICE_ACCOUNT_EXTRAS = ("keyfile_dict", "keyfile", "key_path")
 
 def validate_gcp_credentials(
     login: str | None,
-    password: str | None,
+    password: str | SecretStr | None,
     extras: dict,
 ) -> None:
     """Check that the credential settings of a GCS connection are coherent.
@@ -256,14 +295,14 @@ class GoogleCloudPlatformConnectionExtraSchema(BaseModel):
         None,
         description="Optional path inside the bucket, appended to the base URI.",
     )
-    keyfile_dict: dict | None = Field(
+    keyfile_dict: SecretJson | None = Field(
         None,
         description=(
             "Service account credentials as a mapping (parsed JSON). "
             "Use when credentials are injected as structured data."
         ),
     )
-    keyfile: str | None = Field(
+    keyfile: SecretStr | None = Field(
         None,
         description=(
             "Service account credentials as a raw JSON string. "
@@ -316,7 +355,7 @@ AWS_CONN_TYPES = ("aws", "s3")
 
 def validate_aws_credentials(
     login: str | None,
-    password: str | None,
+    password: str | SecretStr | None,
     extras: dict,
 ) -> None:
     """Check that the credential settings of an S3 connection are coherent.
@@ -397,7 +436,7 @@ class AwsConnectionExtraSchema(BaseModel):
             "with `role_arn` and `source_profile` assumes that IAM role."
         ),
     )
-    aws_session_token: str | None = Field(
+    aws_session_token: SecretStr | None = Field(
         None,
         description="Session token that goes with static keys (login/password).",
     )
