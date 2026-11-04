@@ -8,12 +8,10 @@ dependencies = [
     "deltalake>=0.15",
     "duckdb>=2.0.0",
     "pandas>=2.0",
-    "pandas-stubs>=2.3.2.250926",
     "pyarrow>=16.0.0",
     "pydantic>=2.12.2",
     "sqlalchemy>=1.4.49",
     "pyyaml>=6.0.3",
-    "types-pyyaml>=6.0.12.20250915",
 ]
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -36,6 +34,8 @@ dev = [
     "ruff>=0.14.0",
     "pip-audit>=2.10.1",
     "pytest>=8.4.2",
+    "pandas-stubs>=2.3.2.250926",
+    "types-pyyaml>=6.0.12.20250915",
 ]
 docs = [
     "griffe-pydantic>=1.1.8",
