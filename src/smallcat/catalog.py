@@ -38,7 +38,7 @@ from smallcat.datasets.parquet_dataset import (
 )
 
 if typing.TYPE_CHECKING:
-    import pandas as pd
+    import polars as pl
     import pyarrow as pa
 
 
@@ -95,15 +95,15 @@ class EntryBase(BaseModel, ABC):
         """Construct and return the concrete dataset for this entry."""
         raise NotImplementedError
 
-    def load_pandas(
+    def load_polars(
         self,
         where: str | None = None,
         columns: list[str] | None = None,
-    ) -> "pd.DataFrame":
-        """Load this entry's dataset into a pandas DataFrame.
+    ) -> "pl.DataFrame":
+        """Load this entry's dataset into a Polars DataFrame.
 
         This method builds the concrete dataset via :meth:`build_dataset` and
-        delegates to its ``load_pandas`` method using this entry's ``location``.
+        delegates to its ``load_polars`` method using this entry's ``location``.
         Any dataset-specific load options configured on the entry are respected.
 
         Args:
@@ -111,35 +111,35 @@ class EntryBase(BaseModel, ABC):
             columns: Optional list of columns to project.
 
         Returns:
-            pd.DataFrame: The loaded tabular data.
+            pl.DataFrame: The loaded tabular data.
 
         Raises:
             FileNotFoundError: If the target path/table at ``location`` does not exist.
             ValueError: If the data cannot be parsed as tabular data.
             Exception: Any other error raised by the underlying dataset implementation.
         """
-        return self.build_dataset().load_pandas(
+        return self.build_dataset().load_polars(
             self.location,
             where=where,
             columns=columns,
         )
 
-    def save_pandas(self, df: "pd.DataFrame") -> None:
-        """Save a pandas DataFrame to this entry's dataset location.
+    def save_polars(self, df: "pl.DataFrame") -> None:
+        """Save a Polars DataFrame to this entry's dataset location.
 
         This method builds the concrete dataset via :meth:`build_dataset` and
-        delegates to its ``save_pandas`` method using this entry's ``location``.
+        delegates to its ``save_polars`` method using this entry's ``location``.
         Any dataset-specific save options configured on the entry are respected.
 
         Args:
-            df (pd.DataFrame): The DataFrame to persist.
+            df (pl.DataFrame): The DataFrame to persist.
 
         Raises:
             PermissionError: If the target cannot be written to.
             ValueError: If the DataFrame is incompatible with the target format/options.
             Exception: Any other error raised by the underlying dataset implementation.
         """
-        self.build_dataset().save_pandas(self.location, df)
+        self.build_dataset().save_polars(self.location, df)
 
     def load_arrow(
         self,
@@ -423,18 +423,18 @@ class Catalog(BaseModel):
         entry = self._get_entry(key)
         return entry.build_dataset()
 
-    def load_pandas(
+    def load_polars(
         self,
         key: str,
         where: str | None = None,
         columns: list[str] | None = None,
-    ) -> "pd.DataFrame":
-        """Load a dataset from the catalog into a pandas DataFrame.
+    ) -> "pl.DataFrame":
+        """Load a dataset from the catalog into a Polars DataFrame.
 
         Resolves the catalog entry identified by ``key`` and delegates to
-        :meth:`EntryBase.load_pandas`. This is equivalent to:
+        :meth:`EntryBase.load_polars`. This is equivalent to:
 
-            ``self.entries[key].build_dataset().load_pandas(entry.location)``
+            ``self.entries[key].build_dataset().load_polars(entry.location)``
 
         Args:
             key: The catalog entry name to load.
@@ -442,32 +442,32 @@ class Catalog(BaseModel):
             columns: Optional list of columns to project.
 
         Returns:
-            pd.DataFrame: The loaded tabular data.
+            pl.DataFrame: The loaded tabular data.
 
         Raises:
             KeyError: If ``key`` is not present in the catalog.
             Exception: Any error propagated from the underlying dataset's loader.
         """
         entry = self._get_entry(key)
-        return entry.load_pandas(where=where, columns=columns)
+        return entry.load_polars(where=where, columns=columns)
 
-    def save_pandas(self, key: str, df: "pd.DataFrame") -> None:
-        """Save a pandas DataFrame to a dataset in the catalog.
+    def save_polars(self, key: str, df: "pl.DataFrame") -> None:
+        """Save a Polars DataFrame to a dataset in the catalog.
 
         Resolves the catalog entry identified by ``key`` and delegates to
-        :meth:`EntryBase.save_pandas`. This writes to the entry's configured
+        :meth:`EntryBase.save_polars`. This writes to the entry's configured
         ``location`` with any format-specific save options applied.
 
         Args:
             key: The catalog entry name to write to.
-            df (pd.DataFrame): The DataFrame to persist.
+            df (pl.DataFrame): The DataFrame to persist.
 
         Raises:
             KeyError: If ``key`` is not present in the catalog.
             Exception: Any error propagated from the underlying dataset's saver.
         """
         entry = self._get_entry(key)
-        entry.save_pandas(df)
+        entry.save_polars(df)
 
     def load_arrow(
         self,

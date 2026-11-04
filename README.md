@@ -55,17 +55,17 @@ entries:
 from smallcat.catalog import Catalog
 
 catalog = Catalog.from_yaml("catalog.yaml")
-catalog.save_pandas("foo", df)
-df2 = catalog.load_pandas("foo")
+catalog.save_polars("foo", df)
+df2 = catalog.load_polars("foo")
 ```
 
 ### Filter on load
 
-`load_pandas` (and the lower-level Arrow loaders) accept optional `where` and
+`load_polars` (and the lower-level Arrow loaders) accept optional `where` and
 `columns` arguments to push filters and projections down to DuckDB/Arrow when reading:
 
 ```python
-df = catalog.load_pandas(
+df = catalog.load_polars(
     "bar",
     where="event_date >= '2024-01-01'",
     columns=["event_date", "user_id"],
@@ -77,7 +77,7 @@ df = catalog.load_pandas(
 from smallcat.catalog import Catalog
 
 catalog = Catalog.from_airflow_variable("example_catalog")
-df = catalog.load_pandas("bar")
+df = catalog.load_polars("bar")
 ```
 
 ## Catalog reference

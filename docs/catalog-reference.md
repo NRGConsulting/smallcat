@@ -100,7 +100,7 @@ entries:
 ```
 
 ```python
-catalog.load_pandas("leak")   # ValueError: Path escapes the base location
+catalog.load_polars("leak")   # ValueError: Path escapes the base location
 ```
 
 Without `base_uri` or `base_path`, an `fs` connection resolves paths relative

@@ -6,7 +6,7 @@ import urllib.request
 from unittest.mock import MagicMock, patch
 
 import duckdb
-import pandas as pd
+import polars as pl
 import pytest
 from pydantic import ValidationError
 
@@ -292,6 +292,6 @@ def test_roundtrip_against_an_s3_server(s3_catalog, file_format, location):
     import uuid
 
     catalog = s3_catalog(file_format, f"{uuid.uuid4().hex}/{location}")
-    df = pd.DataFrame({"a": [1, 2, 3], "b": list("xyz")})
-    catalog.save_pandas("e", df)
-    assert catalog.load_pandas("e").sort_values("a").reset_index(drop=True).equals(df)
+    df = pl.DataFrame({"a": [1, 2, 3], "b": list("xyz")})
+    catalog.save_polars("e", df)
+    assert catalog.load_polars("e").sort("a").equals(df)

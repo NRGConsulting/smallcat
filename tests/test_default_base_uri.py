@@ -1,4 +1,4 @@
-import pandas as pd
+import polars as pl
 import pytest
 
 from smallcat.datasets.csv_dataset import CSVDataset
@@ -22,7 +22,7 @@ def test_fs_without_extras_resolves_relative_to_cwd(rel, expected):
 def test_fs_without_extras_writes_in_current_directory(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     ds = CSVDataset(conn={"conn_type": "fs"})
-    ds.save_pandas("out.csv", pd.DataFrame({"a": [1, 2]}))
+    ds.save_polars("out.csv", pl.DataFrame({"a": [1, 2]}))
     assert (tmp_path / "out.csv").exists()
 
 

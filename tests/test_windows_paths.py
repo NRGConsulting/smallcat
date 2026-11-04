@@ -4,7 +4,7 @@
 
 from pathlib import Path
 
-import pandas as pd
+import polars as pl
 import pytest
 
 from smallcat.datasets.csv_dataset import CSVDataset
@@ -63,6 +63,6 @@ def test_constructor_does_not_create_directories(tmp_path: Path) -> None:
 def test_save_creates_nested_directories(tmp_path: Path) -> None:
     base = tmp_path / "a" / "b"
     ds = CSVDataset(conn={"conn_type": "fs", "extra": {"base_path": str(base)}})
-    ds.save_pandas("c/out.csv", pd.DataFrame({"x": [1, 2]}))
+    ds.save_polars("c/out.csv", pl.DataFrame({"x": [1, 2]}))
     assert (base / "c" / "out.csv").exists()
-    assert ds.load_pandas("c/out.csv")["x"].tolist() == [1, 2]
+    assert ds.load_polars("c/out.csv")["x"].to_list() == [1, 2]

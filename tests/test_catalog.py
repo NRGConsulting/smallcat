@@ -1,9 +1,10 @@
 import json
 
-import pandas as pd
+import polars as pl
 import pyarrow as pa
 import pytest
 import yaml
+from polars.testing import assert_frame_equal
 
 from smallcat.catalog import Catalog
 from smallcat.datasets.csv_dataset import CSVDataset
@@ -38,28 +39,28 @@ def test_catalog_dict(example_catalog, example_df):
     with pytest.raises(KeyError):
         catalog.get_dataset('missing_key')
 
-    catalog.save_pandas('foo', example_df)
-    loaded_df = catalog.load_pandas('foo')
+    catalog.save_polars('foo', example_df)
+    loaded_df = catalog.load_polars('foo')
 
-    filtered_df = catalog.load_pandas('foo', where="amount > 10")
-    expected_filtered = example_df[example_df["amount"] > 10].reset_index(drop=True)
+    filtered_df = catalog.load_polars('foo', where="amount > 10")
+    expected_filtered = example_df.filter(pl.col("amount") > 10)
 
-    projected_df = catalog.load_pandas('foo', columns=['name', 'id'])
-    expected_projected = example_df[['name', 'id']].reset_index(drop=True)
+    projected_df = catalog.load_polars('foo', columns=['name', 'id'])
+    expected_projected = example_df.select('name', 'id')
 
     loaded_arrow = catalog.load_arrow('foo', where="amount > 10")
     assert isinstance(loaded_arrow, pa.Table)
-    arrow_filtered_df = loaded_arrow.to_pandas().reset_index(drop=True)
+    arrow_filtered_df = pl.DataFrame(loaded_arrow)
 
     loaded_arrow_projected = catalog.load_arrow('foo', columns=['name'])
     assert isinstance(loaded_arrow_projected, pa.Table)
-    arrow_projected_df = loaded_arrow_projected.to_pandas().reset_index(drop=True)
+    arrow_projected_df = pl.DataFrame(loaded_arrow_projected)
 
-    pd.testing.assert_frame_equal(example_df, loaded_df)
-    pd.testing.assert_frame_equal(expected_filtered, filtered_df.reset_index(drop=True))
-    pd.testing.assert_frame_equal(expected_filtered, arrow_filtered_df)
-    pd.testing.assert_frame_equal(expected_projected, projected_df)
-    pd.testing.assert_frame_equal(expected_projected[['name']], arrow_projected_df)
+    assert_frame_equal(example_df, loaded_df)
+    assert_frame_equal(expected_filtered, filtered_df)
+    assert_frame_equal(expected_filtered, arrow_filtered_df)
+    assert_frame_equal(expected_projected, projected_df)
+    assert_frame_equal(expected_projected.select('name'), arrow_projected_df)
 
 
 def test_catalog_yaml(example_catalog, tmp_path):

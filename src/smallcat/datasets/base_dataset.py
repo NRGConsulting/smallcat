@@ -6,12 +6,12 @@ datasets (CSV, Parquet, Excel, Delta, etc.). It standardizes how a dataset:
 * Receives an Airflow-like connection (or dict) and exposes its extras.
 * Resolves relative paths to fully-qualified URIs (e.g., `file://`, `gs://`).
 * Creates isolated DuckDB connections, loading extensions and provider secrets.
-* Loads and saves data via a simple Arrow/pandas-friendly API.
+* Loads and saves data via a simple Arrow/Polars-friendly API.
 
 Typical usage:
   >>> ds = MyDataset.from_conn_id("my_fs")
   >>> table = ds.load_arrow_table("bronze/my_table.parquet")
-  >>> ds.save_pandas("silver/my_table.parquet", table.to_pandas())
+  >>> ds.save_polars("silver/my_table.parquet", pl.DataFrame(table))
 
 Key concepts:
   * `_full_uri(rel_path)` joins relative paths to the connection's base URI.
@@ -20,7 +20,7 @@ Key concepts:
     `save_arrow_table`.
 
 Dependencies:
-  duckdb, pyarrow, pandas, pydantic, and Smallcat connection utilities.
+  duckdb, pyarrow, polars, pydantic, and Smallcat connection utilities.
 """
 
 import json
@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Generic, TypeVar
 
 import duckdb
-import pandas as pd
+import polars as pl
 import pyarrow as pa
 from pydantic import BaseModel
 from sqlalchemy import MetaData, Table, literal_column, select, text
@@ -135,7 +135,7 @@ class BaseDataset(ABC, Generic[L, S]):
       * Creates a fresh DuckDB connection per operation, configuring extensions
         and any provider-specific secrets (e.g., GCS).
       * Defines an abstract API to load and save Arrow tables, plus
-        convenience pandas helpers.
+        convenience Polars helpers.
 
     Type Parameters:
       L: Pydantic model describing load options.
@@ -279,13 +279,13 @@ class BaseDataset(ABC, Generic[L, S]):
         """
         ...
 
-    def load_pandas(
+    def load_polars(
         self,
         path: str,
         where: str | None = None,
         columns: list[str] | None = None,
-    ) -> pd.DataFrame:
-        """Load data as a pandas DataFrame.
+    ) -> pl.DataFrame:
+        """Load data as a Polars DataFrame.
 
         This is a convenience wrapper over `load_arrow_table` and pushes down
         filters when provided.
@@ -296,17 +296,17 @@ class BaseDataset(ABC, Generic[L, S]):
           columns: Optional list of columns to project.
 
         Returns:
-          A pandas `DataFrame`.
+          A Polars `DataFrame`.
         """
         arrow_table = self.load_arrow_table(
             path=path,
             where=where,
             columns=columns,
         )
-        return arrow_table.to_pandas()
+        return pl.DataFrame(arrow_table)
 
-    def save_pandas(self, path: str, df: pd.DataFrame) -> None:
-        """Persist a pandas DataFrame.
+    def save_polars(self, path: str, df: pl.DataFrame) -> None:
+        """Persist a Polars DataFrame.
 
         Converts the DataFrame to a `pyarrow.Table` and delegates to
         `save_arrow_table`.
@@ -318,8 +318,7 @@ class BaseDataset(ABC, Generic[L, S]):
         Returns:
             None
         """
-        arrow_table = pa.Table.from_pandas(df)
-        self.save_arrow_table(path, table=arrow_table)
+        self.save_arrow_table(path, table=df.to_arrow())
 
     def save_options_dict(self) -> dict:
         """Serialize save options to a plain dict.

@@ -88,23 +88,24 @@ The example pulls the Seattle weather CSV, stores it as foo, then creates a filt
 from datetime import datetime
 from airflow import DAG
 from airflow.decorators import task
-import pandas as pd
+import polars as pl
 
 from smallcat.catalog import Catalog
 
 
 SOURCE_URL = "https://raw.githubusercontent.com/vega/vega-datasets/master/data/seattle-weather.csv"
 
-def transform(df: pd.DataFrame) -> pd.DataFrame:
+def transform(df: pl.DataFrame) -> pl.DataFrame:
     """This would usually be a function that you import and you have tested in notebooks"""
     return (
         df
-        .assign(date=lambda d: pd.to_datetime(d["date"]))
-        .loc[lambda d: d["date"].between("2012-01-01", "2012-03-31")
-                      & d["weather"].isin(["rain", "drizzle"])]
-        .assign(temp_range=lambda d: d["temp_max"] - d["temp_min"])
-        .loc[:, ["date", "precipitation", "temp_max", "temp_min", "weather", "temp_range"]]
-        .copy()
+        .with_columns(pl.col("date").cast(pl.Date))
+        .filter(
+            pl.col("date").is_between(pl.date(2012, 1, 1), pl.date(2012, 3, 31))
+            & pl.col("weather").is_in(["rain", "drizzle"])
+        )
+        .with_columns((pl.col("temp_max") - pl.col("temp_min")).alias("temp_range"))
+        .select("date", "precipitation", "temp_max", "temp_min", "weather", "temp_range")
     )
 
 with DAG(
@@ -119,16 +120,16 @@ with DAG(
         Only used so we have some data to work with.
         This would usually be a Data Engineering process"""
         catalog = Catalog.from_airflow_variable("my_catalog")
-        raw_df = pd.read_csv(SOURCE_URL)
-        catalog.save_pandas("foo", raw_df)
+        raw_df = pl.read_csv(SOURCE_URL)
+        catalog.save_polars("foo", raw_df)
 
     @task
     def ds_pipeline():
         catalog = Catalog.from_airflow_variable("my_catalog")
 
-        df = catalog.load_pandas("foo", where="event_date >= '2024-01-01'")
+        df = catalog.load_polars("foo", where="event_date >= '2024-01-01'")
         out = transform(df)     # Function should be pure, only IO happens in the pipeline with the catalog
-        catalog.save_pandas("foo_processed", out)
+        catalog.save_polars("foo_processed", out)
 
     get_input_data()
     ds_pipeline()
