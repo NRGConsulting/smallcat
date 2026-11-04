@@ -20,6 +20,7 @@ Related options:
   * `ParquetSaveOptions`: overwrite, partition_by, write_partition_columns.
 """
 
+import polars as pl
 import pyarrow as pa
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -84,6 +85,49 @@ class ParquetDataset(BaseDataset[ParquetLoadOptions, ParquetSaveOptions]):
         with self._duckdb_conn() as con:
             rel = con.read_parquet(full_uri, **self.load_options_dict())
             return rel.query("data", query).fetch_record_batch()
+
+    def scan_polars(
+        self,
+        path: str,
+        columns: list[str] | None = None,
+    ) -> pl.LazyFrame:
+        """Lazily scan Parquet with Polars' own reader (no DuckDB).
+
+        Projection and predicate pushdown apply to whatever you chain on the
+        returned `LazyFrame`, so on S3/GCS only the needed columns and row
+        groups are fetched. Credentials come from the connection through
+        :meth:`BaseDataset._object_store_options`.
+
+        Args:
+          path: Relative file, directory or glob (e.g. ``events/**/*.parquet``).
+          columns: Optional list of columns to project.
+
+        Returns:
+          A `polars.LazyFrame`.
+
+        Raises:
+          ValueError: If a load option has no Polars equivalent
+            (`binary_as_string`, `file_row_number`); use `load_polars` instead.
+        """
+        opts = self.load_options_dict()
+        for unsupported in ("binary_as_string", "file_row_number"):
+            if opts.get(unsupported):
+                msg = (
+                    f"Load option '{unsupported}' is not supported by scan_polars; "
+                    "use load_polars instead"
+                )
+                raise ValueError(msg)
+        kwargs: dict = {}
+        if opts.get("hive_partitioning") is not None:
+            kwargs["hive_partitioning"] = opts["hive_partitioning"]
+        if opts.get("union_by_name"):
+            kwargs["missing_columns"] = "insert"
+        lf = pl.scan_parquet(
+            self._full_uri(path),
+            storage_options=self._object_store_options() or None,
+            **kwargs,
+        )
+        return lf.select(columns) if columns else lf
 
     def save_arrow_table(self, path: str, table: pa.Table) -> None:
         """Write a PyArrow table to Parquet.

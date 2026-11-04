@@ -12,6 +12,7 @@
       members: true
       inherited_members:
         - save_polars
+        - scan_polars
         - load_polars
 
 ::: smallcat.catalog.ExcelEntry
@@ -21,6 +22,7 @@
       members: true
       inherited_members:
         - save_polars
+        - scan_polars
         - load_polars
 
 ::: smallcat.catalog.ParquetEntry
@@ -30,6 +32,7 @@
       members: true
       inherited_members:
         - save_polars
+        - scan_polars
         - load_polars
 
 ::: smallcat.catalog.DeltaTableEntry
@@ -39,4 +42,5 @@
       members: true
       inherited_members:
         - save_polars
+        - scan_polars
         - load_polars

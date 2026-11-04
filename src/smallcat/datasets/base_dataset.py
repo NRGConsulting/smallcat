@@ -320,6 +320,29 @@ class BaseDataset(ABC, Generic[L, S]):
         """
         self.save_arrow_table(path, table=df.to_arrow())
 
+    def scan_polars(
+        self,
+        path: str,
+        columns: list[str] | None = None,
+    ) -> pl.LazyFrame:
+        """Return a Polars `LazyFrame` for the dataset at ``path``.
+
+        The default loads the data eagerly with :meth:`load_polars` and wraps it
+        with ``.lazy()``, so the API is uniform but nothing is skipped on read.
+        Formats that can avoid reading unneeded data (Parquet, Delta) override
+        this with a real scan that pushes projections and filters down to the
+        storage layer. Filter with Polars expressions on the result, e.g.
+        ``ds.scan_polars(p).filter(pl.col("x") > 1).collect()``.
+
+        Args:
+          path: Relative dataset path.
+          columns: Optional list of columns to project.
+
+        Returns:
+          A `polars.LazyFrame`.
+        """
+        return self.load_polars(path, columns=columns).lazy()
+
     def save_options_dict(self) -> dict:
         """Serialize save options to a plain dict.
 
@@ -570,6 +593,109 @@ class BaseDataset(ABC, Generic[L, S]):
             "secret": self.conn.password,
             "session_token": x.get("aws_session_token"),
         }
+
+    def _object_store_options(self) -> dict:
+        """Build `storage_options` for the Rust object-store engines.
+
+        delta-rs (Delta reads/writes) and Polars (``scan_*``) use the same
+        ``object_store`` crate, so one set of options serves both. They are
+        derived from the active connection:
+          * `fs` (local): returns `{}`.
+          * `google_cloud_platform` / `google`: uses one of:
+              - `extras.keyfile_dict` (dict or JSON string)
+              - `extras.keyfile` (raw JSON string)
+              - `extras.key_path` (path on worker)
+          * `aws` / `s3`: see :meth:`_aws_object_store_options`.
+
+        Returns:
+          A mapping for the `storage_options` parameter of
+          `deltalake.DeltaTable`, `deltalake.write_deltalake` and
+          `polars.scan_*`. For GCS, keys include one of:
+            * `google_service_account_key` (serialized JSON)
+            * `google_service_account` (path to keyfile)
+
+        Warns:
+          UserWarning: If a Google connection only has HMAC keys (`login` /
+            `password`), which these engines do not support.
+
+        Raises:
+          ValueError: If the connection type is not supported.
+        """
+        if (self.conn.conn_type or "").lower() in AWS_CONN_TYPES:
+            return self._aws_object_store_options()
+        if (self.conn.conn_type or "").lower() not in {
+            "fs",
+            "google_cloud_platform",
+            "google",
+        }:
+            msg = f"Storage options not implemented for type {self.conn.conn_type}"
+            raise ValueError(
+                msg,
+            )
+        x = self.extras
+        if (self.conn.conn_type or "").lower() != "fs":
+            validate_gcp_credentials(self.conn.login, self.conn.password, x)
+
+        # keyfile_dict can be dict or JSON string
+        kfd = x.get("keyfile_dict")
+        if isinstance(kfd, str):
+            try:
+                kfd = json.loads(kfd)
+            except json.JSONDecodeError:
+                # If it's not JSON, ignore and fall through
+                kfd = None
+
+        if isinstance(kfd, dict) and kfd:
+            # Provide serialized key via 'google_service_account_key'
+            return {"google_service_account_key": json.dumps(kfd)}
+
+        if x.get("keyfile"):  # raw JSON string
+            return {"google_service_account_key": x["keyfile"]}
+
+        if x.get("key_path"):  # path on worker
+            return {"google_service_account": x["key_path"]}
+
+        if self.conn.login and self.conn.password and self.conn.conn_type != "fs":
+            warnings.warn(
+                "Delta tables and Polars scans cannot use HMAC keys (login/password) "
+                "for Google Cloud Storage: provide a service account in keyfile_dict, "
+                "keyfile or key_path. Accessing without credentials.",
+                UserWarning,
+                stacklevel=2,
+            )
+        return {}
+
+    def _aws_object_store_options(self) -> dict:
+        """Build object-store `storage_options` for an S3 connection.
+
+        Static keys are passed as they are. Without keys, the engine finds IAM
+        role credentials by itself (environment, web identity, ECS, instance
+        profile). If the connection names a `profile_name`, the credentials are
+        resolved first through DuckDB's AWS credential chain.
+
+        Returns:
+          A mapping with `aws_*` keys.
+
+        Raises:
+          ValueError: If the credential settings contradict each other.
+        """
+        s = self._aws_connection_settings()
+        options: dict[str, str] = {}
+        if s["region"]:
+            options["aws_region"] = s["region"]
+        if s["endpoint"]:
+            scheme = "https" if s["use_ssl"] else "http"
+            options["aws_endpoint"] = f"{scheme}://{s['endpoint']}"
+            if not s["use_ssl"]:
+                options["aws_allow_http"] = "true"
+        if s["key_id"]:
+            options["aws_access_key_id"] = s["key_id"]
+            options["aws_secret_access_key"] = s["secret"]
+            if s["session_token"]:
+                options["aws_session_token"] = s["session_token"]
+        elif s["profile"]:
+            options.update(self._resolve_aws_credentials())
+        return options
 
     def _configure_s3_secret(self, con: duckdb.DuckDBPyConnection) -> None:
         """Create a DuckDB S3 secret from the connection.

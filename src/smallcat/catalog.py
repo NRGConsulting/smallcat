@@ -141,6 +141,22 @@ class EntryBase(BaseModel, ABC):
         """
         self.build_dataset().save_polars(self.location, df)
 
+    def scan_polars(self, columns: list[str] | None = None) -> "pl.LazyFrame":
+        """Lazily scan this entry's dataset as a Polars LazyFrame.
+
+        Parquet and Delta entries are scanned natively, so the projections and
+        filters chained on the result are pushed down to the storage layer
+        (useful on S3/GCS). Other formats are loaded eagerly and wrapped.
+        Filter with Polars expressions, not SQL.
+
+        Args:
+            columns: Optional list of columns to project.
+
+        Returns:
+            pl.LazyFrame: The lazy query; nothing is read until ``collect()``.
+        """
+        return self.build_dataset().scan_polars(self.location, columns=columns)
+
     def load_arrow(
         self,
         where: str | None = None,
@@ -468,6 +484,29 @@ class Catalog(BaseModel):
         """
         entry = self._get_entry(key)
         entry.save_polars(df)
+
+    def scan_polars(
+        self,
+        key: str,
+        columns: list[str] | None = None,
+    ) -> "pl.LazyFrame":
+        """Lazily scan a catalog dataset as a Polars LazyFrame.
+
+        Resolves the catalog entry identified by ``key`` and delegates to
+        :meth:`EntryBase.scan_polars`.
+
+        Args:
+            key: The catalog entry name to scan.
+            columns: Optional list of columns to project.
+
+        Returns:
+            pl.LazyFrame: The lazy query; nothing is read until ``collect()``.
+
+        Raises:
+            KeyError: If ``key`` is not present in the catalog.
+        """
+        entry = self._get_entry(key)
+        return entry.scan_polars(columns=columns)
 
     def load_arrow(
         self,

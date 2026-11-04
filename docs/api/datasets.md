@@ -22,6 +22,7 @@
         - from_conn_id
         - load_polars
         - save_polars
+        - scan_polars
 
 ### Options
 ::: smallcat.datasets.csv_dataset.CSVLoadOptions
@@ -53,6 +54,7 @@
         - from_conn_id
         - load_polars
         - save_polars
+        - scan_polars
 
 ### Options
 ::: smallcat.datasets.excel_dataset.ExcelLoadOptions
@@ -84,6 +86,7 @@
         - from_conn_id
         - load_polars
         - save_polars
+        - scan_polars
 
 ### Options
 ::: smallcat.datasets.parquet_dataset.ParquetLoadOptions
@@ -115,6 +118,7 @@
         - from_conn_id
         - load_polars
         - save_polars
+        - scan_polars
 
 ### Options
 ::: smallcat.datasets.delta_table_dataset.DeltaTableLoadOptions
