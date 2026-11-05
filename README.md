@@ -55,29 +55,64 @@ entries:
 from smallcat.catalog import Catalog
 
 catalog = Catalog.from_yaml("catalog.yaml")
-catalog.save_pandas("foo", df)
-df2 = catalog.load_pandas("foo")
+catalog.save_polars("foo", df)
+df2 = catalog.load_polars("foo")
 ```
 
 ### Filter on load
 
-`load_pandas` (and the lower-level Arrow loaders) accept optional `where` and
+`load_polars` (and the lower-level Arrow loaders) accept optional `where` and
 `columns` arguments to push filters and projections down to DuckDB/Arrow when reading:
 
 ```python
-df = catalog.load_pandas(
+df = catalog.load_polars(
     "bar",
     where="event_date >= '2024-01-01'",
     columns=["event_date", "user_id"],
 )
 ```
 
+### Lazy scans
+
+`scan_polars` returns a Polars `LazyFrame`: nothing is read until `collect()`, and
+the filters and columns you chain are pushed down to the storage layer. On S3/GCS
+this means only the needed columns and row groups are downloaded.
+
+```python
+import polars as pl
+
+df = (
+    catalog.scan_polars("bar")
+    .filter(pl.col("event_date") >= pl.date(2024, 1, 1))  # Polars expressions, not SQL
+    .select("event_date", "user_id")
+    .collect()
+)
+```
+
+| | `load_polars` | `scan_polars` |
+|---|---|---|
+| Engine | DuckDB | Polars' own reader (Parquet) / delta-rs + Polars (Delta) |
+| Filter | `where="amount > 10"` (SQL string) | `.filter(pl.col("amount") > 10)` |
+| Reads | Everything the query needs, immediately | Nothing until `collect()` |
+| Real lazy scan | n/a | Parquet and Delta. CSV and Excel are loaded eagerly and wrapped, so nothing is skipped |
+
+Notes:
+
+* Parquet and Delta use the connection's credentials through the same options
+  (`aws_*`, `google_service_account*`). For Parquet, the DuckDB-only load options
+  `binary_as_string` and `file_row_number` raise a `ValueError` in `scan_polars`;
+  use `load_polars` for those.
+* Existing limits apply: IAM role, SSO and `AssumeRole` credentials are unverified
+  against real AWS, and GCS needs a service account for Delta/`scan_polars` but HMAC
+  keys for DuckDB.
+* Requires `polars>=1.31.0`.
+
 ### With Airflow
 ```python
 from smallcat.catalog import Catalog
 
 catalog = Catalog.from_airflow_variable("example_catalog")
-df = catalog.load_pandas("bar")
+df = catalog.load_polars("bar")
 ```
 
 ## Catalog reference

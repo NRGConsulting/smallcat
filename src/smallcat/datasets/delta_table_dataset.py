@@ -25,15 +25,13 @@ Notes:
 """
 
 import inspect
-import json
-import warnings
 from enum import StrEnum
 
+import polars as pl
 import pyarrow as pa
 from deltalake import DeltaTable, write_deltalake
 from pydantic import BaseModel, ConfigDict, Field
 
-from smallcat.connections import AWS_CONN_TYPES, validate_gcp_credentials
 from smallcat.datasets.base_dataset import BaseDataset
 
 DATABRICKS_UNSUPPORTED_MSG = (
@@ -117,102 +115,42 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
     def _delta_storage_options(self) -> dict:
         """Build `storage_options` for delta-rs reads/writes.
 
-        The options are derived from the active connection:
-          * `fs` (local): returns `{}`.
-          * `google_cloud_platform` / `google`: uses one of:
-              - `extras.keyfile_dict` (dict or JSON string)
-              - `extras.keyfile` (raw JSON string)
-              - `extras.key_path` (path on worker)
+        Delegates to :meth:`BaseDataset._object_store_options`, which Polars
+        scans share. See there for the keys, warnings and errors.
+        """
+        return self._object_store_options()
+
+    def scan_polars(
+        self,
+        path: str,
+        columns: list[str] | None = None,
+    ) -> pl.LazyFrame:
+        """Lazily scan the Delta table with Polars.
+
+        The Delta log is read through delta-rs, which also resolves the
+        connection credentials, and Polars scans only the Parquet files that
+        the query needs (partition and statistics pruning, projection and
+        predicate pushdown).
+
+        Args:
+          path: Relative path to the Delta table.
+          columns: Optional list of columns to project.
 
         Returns:
-          A mapping suitable for the `storage_options` parameter used by
-          `deltalake.DeltaTable` and `deltalake.write_deltalake`. For GCS,
-          keys include one of:
-            * `google_service_account_key` (serialized JSON)
-            * `google_service_account` (path to keyfile)
-
-        Warns:
-          UserWarning: If a Google connection only has HMAC keys (`login` /
-            `password`), which delta-rs does not support.
+          A `polars.LazyFrame`.
 
         Raises:
-          ValueError: If the connection type is not supported.
+          NotImplementedError: For Databricks connections.
         """
-        if (self.conn.conn_type or "").lower() in AWS_CONN_TYPES:
-            return self._aws_storage_options()
-        if (self.conn.conn_type or "").lower() not in {
-            "fs",
-            "google_cloud_platform",
-            "google",
-        }:
-            msg = f"Storage options not implemented for type {self.conn.conn_type}"
-            raise ValueError(
-                msg,
-            )
-        x = self.extras
-        if (self.conn.conn_type or "").lower() != "fs":
-            validate_gcp_credentials(self.conn.login, self.conn.password, x)
-
-        # keyfile_dict can be dict or JSON string
-        kfd = x.get("keyfile_dict")
-        if isinstance(kfd, str):
-            try:
-                kfd = json.loads(kfd)
-            except json.JSONDecodeError:
-                # If it's not JSON, ignore and fall through
-                kfd = None
-
-        if isinstance(kfd, dict) and kfd:
-            # Provide serialized key via 'google_service_account_key'
-            return {"google_service_account_key": json.dumps(kfd)}
-
-        if x.get("keyfile"):  # raw JSON string
-            return {"google_service_account_key": x["keyfile"]}
-
-        if x.get("key_path"):  # path on worker
-            return {"google_service_account": x["key_path"]}
-
-        if self.conn.login and self.conn.password and self.conn.conn_type != "fs":
-            warnings.warn(
-                "Delta tables cannot use HMAC keys (login/password) for Google "
-                "Cloud Storage: provide a service account in keyfile_dict, "
-                "keyfile or key_path. Accessing without credentials.",
-                UserWarning,
-                stacklevel=2,
-            )
-        return {}
-
-    def _aws_storage_options(self) -> dict:
-        """Build delta-rs `storage_options` for an S3 connection.
-
-        Static keys are passed as they are. Without keys, delta-rs finds IAM role
-        credentials by itself (environment, web identity, ECS, instance profile).
-        If the connection names a `profile_name`, the credentials are resolved
-        first through DuckDB's AWS credential chain.
-
-        Returns:
-          A mapping with `aws_*` keys for `DeltaTable` / `write_deltalake`.
-
-        Raises:
-          ValueError: If the credential settings contradict each other.
-        """
-        s = self._aws_connection_settings()
-        options: dict[str, str] = {}
-        if s["region"]:
-            options["aws_region"] = s["region"]
-        if s["endpoint"]:
-            scheme = "https" if s["use_ssl"] else "http"
-            options["aws_endpoint"] = f"{scheme}://{s['endpoint']}"
-            if not s["use_ssl"]:
-                options["aws_allow_http"] = "true"
-        if s["key_id"]:
-            options["aws_access_key_id"] = s["key_id"]
-            options["aws_secret_access_key"] = s["secret"]
-            if s["session_token"]:
-                options["aws_session_token"] = s["session_token"]
-        elif s["profile"]:
-            options.update(self._resolve_aws_credentials())
-        return options
+        if self.conn.conn_type == "databricks":
+            raise NotImplementedError(DATABRICKS_UNSUPPORTED_MSG)
+        table = DeltaTable(
+            self._full_uri(path),
+            storage_options=self._delta_storage_options(),
+            **self.load_options_dict(),
+        )
+        lf = pl.scan_delta(table)
+        return lf.select(columns) if columns else lf
 
     def load_arrow_record_batch_reader(
         self,

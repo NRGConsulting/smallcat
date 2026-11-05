@@ -1,4 +1,4 @@
-import pandas as pd
+import polars as pl
 import pytest
 
 
@@ -10,7 +10,7 @@ def local_conn(tmp_path):
 
 @pytest.fixture
 def example_df():
-    return pd.DataFrame(
+    return pl.DataFrame(
         {
             "id": [1.0, 2.0, 3.0],
             "name": ["Alice", "Bob", "Cara"],
@@ -21,7 +21,7 @@ def example_df():
 
 @pytest.fixture
 def another_example_df():
-    return pd.DataFrame(
+    return pl.DataFrame(
         {
             "id": [4.0, 5.0, 6.0],
             "name": ["John", "Chris", "Wendy"],

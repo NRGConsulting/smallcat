@@ -34,7 +34,7 @@ If not, connection dictionaries are handled directly through Smallcat's
 Key Features
 ------------
 * Declarative configuration of datasets and connections in YAML.
-* Unified, typed API to load or save data as PyArrow or pandas objects.
+* Unified, typed API to load or save data as PyArrow or Polars objects.
 * Automatic URI resolution (e.g., `file://`, `gs://`) from connection info.
 * Extensible dataset types—new formats can be added by subclassing
   :class:`smallcat.datasets.base_dataset.BaseDataset`.

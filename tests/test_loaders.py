@@ -1,7 +1,8 @@
 from pathlib import Path
 
-import pandas as pd
+import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
 
 from smallcat.datasets.csv_dataset import CSVDataset, CSVLoadOptions, CSVSaveOptions
 from smallcat.datasets.delta_table_dataset import (
@@ -34,12 +35,12 @@ from smallcat.datasets.parquet_dataset import (
 def test_csv_dataset(example_df, local_conn, save_options, load_options):
     file_name = "foo.csv"
     saver = CSVDataset(local_conn, save_options=save_options)
-    saver.save_pandas(file_name, example_df)
+    saver.save_polars(file_name, example_df)
 
     dataset = CSVDataset(local_conn, load_options=load_options)
-    loaded_df = dataset.load_pandas(file_name)
+    loaded_df = dataset.load_polars(file_name)
 
-    pd.testing.assert_frame_equal(example_df, loaded_df)
+    assert_frame_equal(example_df, loaded_df)
 
 
 @pytest.mark.parametrize(
@@ -61,12 +62,12 @@ def test_csv_dataset(example_df, local_conn, save_options, load_options):
 def test_excel_dataset(example_df, local_conn, save_options, load_options):
     file_name = "foo.xlsx"
     saver = ExcelDataset(local_conn, save_options=save_options)
-    saver.save_pandas(file_name, example_df)
+    saver.save_polars(file_name, example_df)
 
     dataset = ExcelDataset(local_conn, load_options=load_options)
-    loaded_df = dataset.load_pandas(file_name)
+    loaded_df = dataset.load_polars(file_name)
 
-    pd.testing.assert_frame_equal(example_df, loaded_df)
+    assert_frame_equal(example_df, loaded_df)
 
 
 @pytest.mark.parametrize(
@@ -96,26 +97,25 @@ def test_parquet_dataset(
     )
 
     saver = ParquetDataset(local_conn, save_options=save_options)
-    saver.save_pandas(file_name, example_df)
-    saver.save_pandas(another_file_name, another_example_df)
+    saver.save_polars(file_name, example_df)
+    saver.save_polars(another_file_name, another_example_df)
 
     dataset = ParquetDataset(local_conn, load_options=load_options)
-    loaded_df = dataset.load_pandas("foo/**/*.parquet")
+    loaded_df = dataset.load_polars("foo/**/*.parquet")
 
     hive_partitioning = load_options and load_options.hive_partitioning
-    validation_df = pd.concat(
+    validation_df = pl.concat(
         [
-            example_df.assign(year=2024) if hive_partitioning else example_df,
-            another_example_df.assign(year=2025)
+            example_df.with_columns(year=pl.lit(2024, dtype=pl.Int64))
+            if hive_partitioning
+            else example_df,
+            another_example_df.with_columns(year=pl.lit(2025, dtype=pl.Int64))
             if hive_partitioning
             else another_example_df,
         ],
-    ).reset_index(drop=True)
-
-    pd.testing.assert_frame_equal(
-        validation_df,
-        loaded_df.reset_index(drop=True),
     )
+
+    assert_frame_equal(validation_df, loaded_df)
 
 
 @pytest.mark.parametrize(
@@ -132,52 +132,70 @@ def test_parquet_dataset(
 def test_delta_table_dataset(example_df, local_conn, save_options, load_options):
     table_path = "foo/"
     saver = DeltaTableDataset(local_conn, save_options=save_options)
-    saver.save_pandas(table_path, example_df)
+    saver.save_polars(table_path, example_df)
 
     dataset = DeltaTableDataset(local_conn, load_options=load_options)
-    loaded_df = dataset.load_pandas(table_path)
+    loaded_df = dataset.load_polars(table_path)
 
-    pd.testing.assert_frame_equal(example_df, loaded_df)
+    assert_frame_equal(example_df, loaded_df)
 
 
 def test_delta_table_dataset_with_where(example_df, local_conn):
     table_path = "foo/"
     saver = DeltaTableDataset(local_conn)
-    saver.save_pandas(table_path, example_df)
+    saver.save_polars(table_path, example_df)
 
     dataset = DeltaTableDataset(local_conn)
-    loaded_df = dataset.load_pandas(
+    loaded_df = dataset.load_polars(
         table_path,
         where="amount > 10",
         columns=["id", "amount"],
     )
 
-    expected_df = (
-        example_df.loc[example_df["amount"] > 10, ["id", "amount"]]
-        .reset_index(drop=True)
-    )
-    pd.testing.assert_frame_equal(expected_df, loaded_df.reset_index(drop=True))
+    expected_df = example_df.filter(pl.col("amount") > 10).select("id", "amount")
+    assert_frame_equal(expected_df, loaded_df)
 
 
 def test_csv_dataset_with_columns(example_df, local_conn):
     file_name = "foo.csv"
     saver = CSVDataset(local_conn)
-    saver.save_pandas(file_name, example_df)
+    saver.save_polars(file_name, example_df)
 
     dataset = CSVDataset(local_conn)
-    loaded_df = dataset.load_pandas(file_name, columns=["name", "id"])
+    loaded_df = dataset.load_polars(file_name, columns=["name", "id"])
 
-    expected_df = example_df[["name", "id"]]
-    pd.testing.assert_frame_equal(expected_df.reset_index(drop=True), loaded_df)
+    expected_df = example_df.select("name", "id")
+    assert_frame_equal(expected_df, loaded_df)
 
 
 def test_csv_dataset_rejects_unsafe_inputs(example_df, local_conn):
     file_name = "foo.csv"
     saver = CSVDataset(local_conn)
-    saver.save_pandas(file_name, example_df)
+    saver.save_polars(file_name, example_df)
 
     dataset = CSVDataset(local_conn)
     with pytest.raises(ValueError):
-        dataset.load_pandas(file_name, where="amount > 10; drop table data")
+        dataset.load_polars(file_name, where="amount > 10; drop table data")
     with pytest.raises(ValueError):
-        dataset.load_pandas(file_name, columns=["name;drop"])
+        dataset.load_polars(file_name, columns=["name;drop"])
+
+
+@pytest.mark.parametrize("dataset_cls", [ParquetDataset, DeltaTableDataset])
+def test_polars_roundtrip_keeps_nulls_and_types(dataset_cls, local_conn):
+    from datetime import datetime
+
+    df = pl.DataFrame(
+        {
+            "id": pl.Series([1, None, 3], dtype=pl.Int64),
+            "name": ["a", None, "c"],
+            "ts": [datetime(2024, 1, 1), None, datetime(2024, 3, 1, 12, 30)],
+        },
+        schema_overrides={"ts": pl.Datetime("us")},
+    )
+    path = "rt.parquet" if dataset_cls is ParquetDataset else "rt/"
+
+    dataset_cls(local_conn).save_polars(path, df)
+    loaded = dataset_cls(local_conn).load_polars(path)
+
+    assert_frame_equal(df, loaded, check_row_order=False)
+    assert "__index_level_0__" not in loaded.columns

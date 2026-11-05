@@ -11,8 +11,9 @@
       show_root_heading: true
       members: true
       inherited_members:
-        - save_pandas
-        - load_pandas
+        - save_polars
+        - scan_polars
+        - load_polars
 
 ::: smallcat.catalog.ExcelEntry
     options:
@@ -20,8 +21,9 @@
       show_root_heading: true
       members: true
       inherited_members:
-        - save_pandas
-        - load_pandas
+        - save_polars
+        - scan_polars
+        - load_polars
 
 ::: smallcat.catalog.ParquetEntry
     options:
@@ -29,8 +31,9 @@
       show_root_heading: true
       members: true
       inherited_members:
-        - save_pandas
-        - load_pandas
+        - save_polars
+        - scan_polars
+        - load_polars
 
 ::: smallcat.catalog.DeltaTableEntry
     options:
@@ -38,5 +41,6 @@
       show_root_heading: true
       members: true
       inherited_members:
-        - save_pandas
-        - load_pandas
+        - save_polars
+        - scan_polars
+        - load_polars

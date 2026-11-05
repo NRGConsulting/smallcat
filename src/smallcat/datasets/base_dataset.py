@@ -6,12 +6,12 @@ datasets (CSV, Parquet, Excel, Delta, etc.). It standardizes how a dataset:
 * Receives an Airflow-like connection (or dict) and exposes its extras.
 * Resolves relative paths to fully-qualified URIs (e.g., `file://`, `gs://`).
 * Creates isolated DuckDB connections, loading extensions and provider secrets.
-* Loads and saves data via a simple Arrow/pandas-friendly API.
+* Loads and saves data via a simple Arrow/Polars-friendly API.
 
 Typical usage:
   >>> ds = MyDataset.from_conn_id("my_fs")
   >>> table = ds.load_arrow_table("bronze/my_table.parquet")
-  >>> ds.save_pandas("silver/my_table.parquet", table.to_pandas())
+  >>> ds.save_polars("silver/my_table.parquet", pl.DataFrame(table))
 
 Key concepts:
   * `_full_uri(rel_path)` joins relative paths to the connection's base URI.
@@ -20,7 +20,7 @@ Key concepts:
     `save_arrow_table`.
 
 Dependencies:
-  duckdb, pyarrow, pandas, pydantic, and Smallcat connection utilities.
+  duckdb, pyarrow, polars, pydantic, and Smallcat connection utilities.
 """
 
 import json
@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Generic, TypeVar
 
 import duckdb
-import pandas as pd
+import polars as pl
 import pyarrow as pa
 from pydantic import BaseModel
 from sqlalchemy import MetaData, Table, literal_column, select, text
@@ -135,7 +135,7 @@ class BaseDataset(ABC, Generic[L, S]):
       * Creates a fresh DuckDB connection per operation, configuring extensions
         and any provider-specific secrets (e.g., GCS).
       * Defines an abstract API to load and save Arrow tables, plus
-        convenience pandas helpers.
+        convenience Polars helpers.
 
     Type Parameters:
       L: Pydantic model describing load options.
@@ -279,13 +279,13 @@ class BaseDataset(ABC, Generic[L, S]):
         """
         ...
 
-    def load_pandas(
+    def load_polars(
         self,
         path: str,
         where: str | None = None,
         columns: list[str] | None = None,
-    ) -> pd.DataFrame:
-        """Load data as a pandas DataFrame.
+    ) -> pl.DataFrame:
+        """Load data as a Polars DataFrame.
 
         This is a convenience wrapper over `load_arrow_table` and pushes down
         filters when provided.
@@ -296,17 +296,17 @@ class BaseDataset(ABC, Generic[L, S]):
           columns: Optional list of columns to project.
 
         Returns:
-          A pandas `DataFrame`.
+          A Polars `DataFrame`.
         """
         arrow_table = self.load_arrow_table(
             path=path,
             where=where,
             columns=columns,
         )
-        return arrow_table.to_pandas()
+        return pl.DataFrame(arrow_table)
 
-    def save_pandas(self, path: str, df: pd.DataFrame) -> None:
-        """Persist a pandas DataFrame.
+    def save_polars(self, path: str, df: pl.DataFrame) -> None:
+        """Persist a Polars DataFrame.
 
         Converts the DataFrame to a `pyarrow.Table` and delegates to
         `save_arrow_table`.
@@ -318,8 +318,30 @@ class BaseDataset(ABC, Generic[L, S]):
         Returns:
             None
         """
-        arrow_table = pa.Table.from_pandas(df)
-        self.save_arrow_table(path, table=arrow_table)
+        self.save_arrow_table(path, table=df.to_arrow())
+
+    def scan_polars(
+        self,
+        path: str,
+        columns: list[str] | None = None,
+    ) -> pl.LazyFrame:
+        """Return a Polars `LazyFrame` for the dataset at ``path``.
+
+        The default loads the data eagerly with :meth:`load_polars` and wraps it
+        with ``.lazy()``, so the API is uniform but nothing is skipped on read.
+        Formats that can avoid reading unneeded data (Parquet, Delta) override
+        this with a real scan that pushes projections and filters down to the
+        storage layer. Filter with Polars expressions on the result, e.g.
+        ``ds.scan_polars(p).filter(pl.col("x") > 1).collect()``.
+
+        Args:
+          path: Relative dataset path.
+          columns: Optional list of columns to project.
+
+        Returns:
+          A `polars.LazyFrame`.
+        """
+        return self.load_polars(path, columns=columns).lazy()
 
     def save_options_dict(self) -> dict:
         """Serialize save options to a plain dict.
@@ -571,6 +593,109 @@ class BaseDataset(ABC, Generic[L, S]):
             "secret": self.conn.password,
             "session_token": x.get("aws_session_token"),
         }
+
+    def _object_store_options(self) -> dict:
+        """Build `storage_options` for the Rust object-store engines.
+
+        delta-rs (Delta reads/writes) and Polars (``scan_*``) use the same
+        ``object_store`` crate, so one set of options serves both. They are
+        derived from the active connection:
+          * `fs` (local): returns `{}`.
+          * `google_cloud_platform` / `google`: uses one of:
+              - `extras.keyfile_dict` (dict or JSON string)
+              - `extras.keyfile` (raw JSON string)
+              - `extras.key_path` (path on worker)
+          * `aws` / `s3`: see :meth:`_aws_object_store_options`.
+
+        Returns:
+          A mapping for the `storage_options` parameter of
+          `deltalake.DeltaTable`, `deltalake.write_deltalake` and
+          `polars.scan_*`. For GCS, keys include one of:
+            * `google_service_account_key` (serialized JSON)
+            * `google_service_account` (path to keyfile)
+
+        Warns:
+          UserWarning: If a Google connection only has HMAC keys (`login` /
+            `password`), which these engines do not support.
+
+        Raises:
+          ValueError: If the connection type is not supported.
+        """
+        if (self.conn.conn_type or "").lower() in AWS_CONN_TYPES:
+            return self._aws_object_store_options()
+        if (self.conn.conn_type or "").lower() not in {
+            "fs",
+            "google_cloud_platform",
+            "google",
+        }:
+            msg = f"Storage options not implemented for type {self.conn.conn_type}"
+            raise ValueError(
+                msg,
+            )
+        x = self.extras
+        if (self.conn.conn_type or "").lower() != "fs":
+            validate_gcp_credentials(self.conn.login, self.conn.password, x)
+
+        # keyfile_dict can be dict or JSON string
+        kfd = x.get("keyfile_dict")
+        if isinstance(kfd, str):
+            try:
+                kfd = json.loads(kfd)
+            except json.JSONDecodeError:
+                # If it's not JSON, ignore and fall through
+                kfd = None
+
+        if isinstance(kfd, dict) and kfd:
+            # Provide serialized key via 'google_service_account_key'
+            return {"google_service_account_key": json.dumps(kfd)}
+
+        if x.get("keyfile"):  # raw JSON string
+            return {"google_service_account_key": x["keyfile"]}
+
+        if x.get("key_path"):  # path on worker
+            return {"google_service_account": x["key_path"]}
+
+        if self.conn.login and self.conn.password and self.conn.conn_type != "fs":
+            warnings.warn(
+                "Delta tables and Polars scans cannot use HMAC keys (login/password) "
+                "for Google Cloud Storage: provide a service account in keyfile_dict, "
+                "keyfile or key_path. Accessing without credentials.",
+                UserWarning,
+                stacklevel=2,
+            )
+        return {}
+
+    def _aws_object_store_options(self) -> dict:
+        """Build object-store `storage_options` for an S3 connection.
+
+        Static keys are passed as they are. Without keys, the engine finds IAM
+        role credentials by itself (environment, web identity, ECS, instance
+        profile). If the connection names a `profile_name`, the credentials are
+        resolved first through DuckDB's AWS credential chain.
+
+        Returns:
+          A mapping with `aws_*` keys.
+
+        Raises:
+          ValueError: If the credential settings contradict each other.
+        """
+        s = self._aws_connection_settings()
+        options: dict[str, str] = {}
+        if s["region"]:
+            options["aws_region"] = s["region"]
+        if s["endpoint"]:
+            scheme = "https" if s["use_ssl"] else "http"
+            options["aws_endpoint"] = f"{scheme}://{s['endpoint']}"
+            if not s["use_ssl"]:
+                options["aws_allow_http"] = "true"
+        if s["key_id"]:
+            options["aws_access_key_id"] = s["key_id"]
+            options["aws_secret_access_key"] = s["secret"]
+            if s["session_token"]:
+                options["aws_session_token"] = s["session_token"]
+        elif s["profile"]:
+            options.update(self._resolve_aws_credentials())
+        return options
 
     def _configure_s3_secret(self, con: duckdb.DuckDBPyConnection) -> None:
         """Create a DuckDB S3 secret from the connection.

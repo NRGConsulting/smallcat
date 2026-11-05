@@ -6,7 +6,7 @@ import urllib.request
 from unittest.mock import MagicMock, patch
 
 import duckdb
-import pandas as pd
+import polars as pl
 import pytest
 from pydantic import ValidationError
 
@@ -292,6 +292,25 @@ def test_roundtrip_against_an_s3_server(s3_catalog, file_format, location):
     import uuid
 
     catalog = s3_catalog(file_format, f"{uuid.uuid4().hex}/{location}")
-    df = pd.DataFrame({"a": [1, 2, 3], "b": list("xyz")})
-    catalog.save_pandas("e", df)
-    assert catalog.load_pandas("e").sort_values("a").reset_index(drop=True).equals(df)
+    df = pl.DataFrame({"a": [1, 2, 3], "b": list("xyz")})
+    catalog.save_polars("e", df)
+    assert catalog.load_polars("e").sort("a").equals(df)
+
+
+@needs_s3_server
+@pytest.mark.parametrize(
+    ("file_format", "location"),
+    [("parquet", "t.parquet"), ("delta_table", "delta")],
+)
+def test_lazy_scan_against_an_s3_server(s3_catalog, file_format, location):
+    import uuid
+
+    catalog = s3_catalog(file_format, f"{uuid.uuid4().hex}/{location}")
+    df = pl.DataFrame({"a": [1, 2, 3], "b": list("xyz")})
+    catalog.save_polars("e", df)
+
+    lazy = catalog.scan_polars("e")
+    out = lazy.filter(pl.col("a") > 1).select("b").collect()
+
+    assert sorted(out["b"].to_list()) == ["y", "z"]
+    assert lazy.sort("a").collect().equals(df)

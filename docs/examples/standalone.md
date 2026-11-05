@@ -43,22 +43,22 @@ The `# yaml-language-server` line gives you intellisense in VS code, so it will 
 Create a python file with the following contents:
 
 ```python
-import pandas as pd
+import polars as pl
 from smallcat.catalog import Catalog
 
 
-def get_example_dataset() -> pd.DataFrame:
+def get_example_dataset() -> pl.DataFrame:
     url = "https://raw.githubusercontent.com/vega/vega-datasets/master/data/seattle-weather.csv"
-    return pd.read_csv(url, parse_dates=["date"])
+    return pl.read_csv(url, try_parse_dates=True)
 
 
 def main():
     print("Hello from smallcat-local-example!")
 
     catalog = Catalog.from_yaml('catalog.yaml')
-    catalog.save_pandas('foo', df=get_example_dataset())
+    catalog.save_polars('foo', df=get_example_dataset())
 
-    df = catalog.load_pandas('foo', where="precipitation > 0")
+    df = catalog.load_polars('foo', where="precipitation > 0")
     print(df.head())
 
 

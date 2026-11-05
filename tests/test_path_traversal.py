@@ -1,4 +1,4 @@
-import pandas as pd
+import polars as pl
 import pytest
 
 from smallcat.datasets.csv_dataset import CSVDataset
@@ -53,5 +53,5 @@ def test_dataset_cannot_write_outside_its_base(tmp_path):
     base.mkdir()
     ds = CSVDataset(conn={"conn_type": "fs", "extra": {"base_uri": str(base)}})
     with pytest.raises(ValueError, match="escapes the base"):
-        ds.save_pandas("../outside.csv", pd.DataFrame({"a": [1]}))
+        ds.save_polars("../outside.csv", pl.DataFrame({"a": [1]}))
     assert not (tmp_path / "outside.csv").exists()

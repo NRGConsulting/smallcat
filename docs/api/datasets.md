@@ -20,8 +20,9 @@
       members: true
       inherited_members:
         - from_conn_id
-        - load_pandas
-        - save_pandas
+        - load_polars
+        - save_polars
+        - scan_polars
 
 ### Options
 ::: smallcat.datasets.csv_dataset.CSVLoadOptions
@@ -51,8 +52,9 @@
       members: true
       inherited_members:
         - from_conn_id
-        - load_pandas
-        - save_pandas
+        - load_polars
+        - save_polars
+        - scan_polars
 
 ### Options
 ::: smallcat.datasets.excel_dataset.ExcelLoadOptions
@@ -82,8 +84,9 @@
       members: true
       inherited_members:
         - from_conn_id
-        - load_pandas
-        - save_pandas
+        - load_polars
+        - save_polars
+        - scan_polars
 
 ### Options
 ::: smallcat.datasets.parquet_dataset.ParquetLoadOptions
@@ -113,8 +116,9 @@
       members: true
       inherited_members:
         - from_conn_id
-        - load_pandas
-        - save_pandas
+        - load_polars
+        - save_polars
+        - scan_polars
 
 ### Options
 ::: smallcat.datasets.delta_table_dataset.DeltaTableLoadOptions
