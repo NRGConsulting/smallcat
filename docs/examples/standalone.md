@@ -14,6 +14,18 @@ or
 uv add smallcat-chonk
 ```
 
+### Create the connections
+Create a file named `connections.yaml`. Connections live apart from the catalog
+and are referred to by name.
+
+```yaml
+connections:
+  tmp:
+    conn_type: fs
+    extra:
+      base_path: /tmp/
+```
+
 ### Create an example catalog
 Create a file named `catalog.yaml` with the following contents.
 
@@ -22,10 +34,7 @@ Create a file named `catalog.yaml` with the following contents.
 entries:
   foo:
     file_format: csv
-    connection:
-      conn_type: fs
-      extra:
-        base_path: /tmp/
+    connection: tmp
     location: foo.csv
     save_options:
       header: true
@@ -44,6 +53,7 @@ Create a python file with the following contents:
 
 ```python
 import polars as pl
+from smallcat import Connections
 from smallcat.catalog import Catalog
 
 
@@ -55,7 +65,7 @@ def get_example_dataset() -> pl.DataFrame:
 def main():
     print("Hello from smallcat-local-example!")
 
-    catalog = Catalog.from_yaml('catalog.yaml')
+    catalog = Catalog.from_yaml('catalog.yaml', connections=Connections.from_yaml('connections.yaml'))
     catalog.save_polars('foo', df=get_example_dataset())
 
     df = catalog.load_polars('foo', where="precipitation > 0")

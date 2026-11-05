@@ -8,15 +8,12 @@ stored in an Airflow Variable, or built from a Python dictionary.
 entries:
   customers:
     file_format: csv
-    connection:
-      conn_type: fs
-      extra:
-        base_path: /data/raw
+    connection: local_raw           # a name defined in Connections
     location: customers.csv
 
   sales:
     file_format: parquet
-    connection: datalake_gcs        # id of an Airflow connection
+    connection: datalake_gcs        # a name defined in Connections
     location: sales/2025/
     load_options:
       hive_partitioning: true
@@ -37,7 +34,7 @@ entries:
 | Field          | Required | Description |
 |----------------|----------|-------------|
 | `file_format`  | yes      | One of `csv`, `excel`, `parquet`, `delta_table`. |
-| `connection`   | yes      | An Airflow connection id (string) or an inline connection mapping. |
+| `connection`   | yes      | The name of a connection loaded in [`Connections`](connections.md) (or an Airflow connection id). An inline mapping still works but is deprecated. |
 | `location`     | yes      | Path of the dataset, relative to the connection's base. |
 | `load_options` | no       | Options applied when reading. Omit it to use the defaults. |
 | `save_options` | no       | Options applied when writing. Omit it to use the defaults. |
@@ -108,9 +105,25 @@ to the current working directory.
 
 ## Connections
 
-`connection` is either the id of an Airflow connection (a string) or an inline
-mapping. An inline mapping is validated when the catalog is loaded, against the
-schema selected by its `conn_type`:
+`connection` is the **name** of a connection. Define the connections in a
+[`Connections`](connections.md) (YAML or Airflow), load them first and pass them
+to the catalog, which checks every name when it is loaded:
+
+```python
+conns = Connections.from_yaml("connections.yaml")
+catalog = Catalog.from_yaml("catalog.yaml", connections=conns)
+```
+
+Without `connections=`, a name is resolved through Airflow the first time it is
+used. The definition of a connection is the mapping described below, whether it
+lives in a `Connections` file or (deprecated) inline in an entry.
+
+!!! warning "Inline connections are deprecated"
+    A `connection` written as a mapping inside an entry still works but emits a
+    `DeprecationWarning`, because it puts credentials in the catalog.
+
+A connection definition is validated when it is loaded, against the schema
+selected by its `conn_type`:
 
 * `conn_type` is required and must be `fs`, `google_cloud_platform` (or its
   alias `google`) or `aws` (alias `s3`). Any other value is rejected.

@@ -54,3 +54,56 @@ In short, Smallcat unifies the way your code accesses data across file formats
 and environments—whether local, cloud, or orchestrated—while remaining simple,
 typed, and dependency-light.
 """
+
+import importlib
+import typing
+
+if typing.TYPE_CHECKING:
+    from smallcat.connections_config import Connections
+    from smallcat.models import (
+        Model,
+        ModelRegistry,
+        ModelValidationMode,
+        ModelWriteMode,
+        use_registry,
+    )
+    from smallcat.models.registry import default_registry as registry
+
+# Public names are resolved on first access, so `import smallcat` stays light:
+# it does not import Polars, DuckDB or Airflow. Each maps to (module, attribute).
+_LAZY_EXPORTS = {
+    "Connections": ("smallcat.connections_config", "Connections"),
+    "Model": ("smallcat.models", "Model"),
+    "ModelRegistry": ("smallcat.models", "ModelRegistry"),
+    "ModelValidationMode": ("smallcat.models", "ModelValidationMode"),
+    "ModelWriteMode": ("smallcat.models", "ModelWriteMode"),
+    "registry": ("smallcat.models.registry", "default_registry"),
+    "use_registry": ("smallcat.models", "use_registry"),
+}
+
+__all__ = [
+    "Connections",
+    "Model",
+    "ModelRegistry",
+    "ModelValidationMode",
+    "ModelWriteMode",
+    "registry",
+    "use_registry",
+]
+
+
+def __getattr__(name: str) -> object:
+    """Resolve the public names of the package on first access."""
+    target = _LAZY_EXPORTS.get(name)
+    if target is None:
+        msg = f"module 'smallcat' has no attribute {name!r}"
+        raise AttributeError(msg)
+    module, attribute = target
+    value = getattr(importlib.import_module(module), attribute)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    """List the public names, including the lazy ones."""
+    return sorted({*globals(), *_LAZY_EXPORTS})

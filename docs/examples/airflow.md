@@ -140,3 +140,16 @@ if __name__ == "__main__":
 ```
 
 After the run, check `/tmp/foo_processed.csv` for the transformed result.
+
+### Fail early on a missing connection
+
+In the DAG above, `connection: local_filesystem` is resolved through Airflow the first time the entry is used. To check every connection the catalog names when it is loaded, load them first:
+
+```python
+from smallcat import Connections
+
+conns = Connections.from_airflow(["local_filesystem"])   # must exist and be valid
+catalog = Catalog.from_airflow_variable("my_catalog", connections=conns)
+```
+
+See [Connections](../connections.md).

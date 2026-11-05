@@ -21,6 +21,24 @@ pip install smallcat-chonk
 ```
 
 ## Quickstart
+### Define connections
+
+Connections live in a file (or in Airflow), never inline in the catalog. Each one
+has a name that catalogs and models refer to; they are validated when loaded.
+
+```yaml
+# connections.yaml
+connections:
+    local:
+        conn_type: fs
+        extra:
+            base_path: /tmp/smallcat-example/
+    lake:
+        conn_type: google_cloud_platform
+        extra:
+            bucket: my-bucket
+```
+
 ### Create Catalog
 
 Local catalogs can be kept in YAML files.
@@ -29,19 +47,13 @@ Local catalogs can be kept in YAML files.
 entries:
     foo:
         file_format: csv
-        connection:
-            conn_type: fs
-            extra:
-                base_path: /tmp/smallcat-example/
+        connection: local
         location: foo.csv
         load_options:
             header: true
     bar:
         file_format: parquet
-        connection:
-            conn_type: google_cloud_platform
-            extra:
-                bucket: my-bucket
+        connection: lake
         location: bar.parquet
         save_options:
             partition_by:
@@ -52,12 +64,17 @@ entries:
 ### Standalone
 
 ```python
+from smallcat import Connections
 from smallcat.catalog import Catalog
 
-catalog = Catalog.from_yaml("catalog.yaml")
+conns = Connections.from_yaml("connections.yaml")
+catalog = Catalog.from_yaml("catalog.yaml", connections=conns)
 catalog.save_polars("foo", df)
 df2 = catalog.load_polars("foo")
 ```
+
+A connection name that is not in `conns` fails when the catalog is loaded, not on
+the first read.
 
 ### Filter on load
 
@@ -109,11 +126,51 @@ Notes:
 
 ### With Airflow
 ```python
+from smallcat import Connections
 from smallcat.catalog import Catalog
 
-catalog = Catalog.from_airflow_variable("example_catalog")
+conns = Connections.from_airflow(["lake"])      # resolved and validated now
+catalog = Catalog.from_airflow_variable("example_catalog", connections=conns)
 df = catalog.load_polars("bar")
 ```
+
+## Models
+
+A model describes a dataset: its columns, where it lives and how it is stored.
+`Model.objects` reads and writes it as Polars DataFrames, validated against the
+model. The model never names a connection: the registry does, per environment.
+
+```python
+import polars as pl
+from smallcat import Connections, Model, ModelWriteMode, registry
+
+class Customer(Model):
+    id: int
+    name: str
+    email: str | None = None
+
+    class Meta:
+        location = "silver/customers"
+        file_format = "parquet"
+
+registry.load_connections(Connections.from_yaml("connections.yaml"))
+registry.register(Customer, connection="lake")
+
+Customer.objects.filter(pl.col("id") > 10).select("id", "name").all()  # DataFrame
+Customer.objects.filter(pl.col("id") > 10).lazy()                      # LazyFrame
+Customer.objects.save(df, mode=ModelWriteMode.OVERWRITE)               # mode is required
+```
+
+* `mode` is required: `OVERWRITE` replaces the whole dataset, `APPEND` adds rows
+  (Delta only). There is no upsert.
+* `allowed_write_modes` in `Meta` limits what a model may do (`[]` is read-only);
+  registering can restrict it further per environment, never widen it.
+* `validation_mode` is `STRICT` (types must match) or `COERCE` (cast, failing only on
+  values that cannot be cast without loss).
+
+See [Models](https://nrgconsulting.github.io/smallcat/models/) and a runnable
+[example](https://nrgconsulting.github.io/smallcat/examples/models/) and a walk-through of
+[querying with `filter`, `where`, `all` and `lazy`](https://nrgconsulting.github.io/smallcat/examples/models_query/).
 
 ## Catalog reference
 
