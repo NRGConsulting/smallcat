@@ -60,23 +60,46 @@ import typing
 
 if typing.TYPE_CHECKING:
     from smallcat.connections_config import Connections
+    from smallcat.models import (
+        Model,
+        ModelRegistry,
+        ModelValidationMode,
+        ModelWriteMode,
+        use_registry,
+    )
+    from smallcat.models.registry import default_registry as registry
 
 # Public names are resolved on first access, so `import smallcat` stays light:
-# it does not import Polars, DuckDB or Airflow.
+# it does not import Polars, DuckDB or Airflow. Each maps to (module, attribute).
 _LAZY_EXPORTS = {
-    "Connections": "smallcat.connections_config",
+    "Connections": ("smallcat.connections_config", "Connections"),
+    "Model": ("smallcat.models", "Model"),
+    "ModelRegistry": ("smallcat.models", "ModelRegistry"),
+    "ModelValidationMode": ("smallcat.models", "ModelValidationMode"),
+    "ModelWriteMode": ("smallcat.models", "ModelWriteMode"),
+    "registry": ("smallcat.models.registry", "default_registry"),
+    "use_registry": ("smallcat.models", "use_registry"),
 }
 
-__all__ = ["Connections"]
+__all__ = [
+    "Connections",
+    "Model",
+    "ModelRegistry",
+    "ModelValidationMode",
+    "ModelWriteMode",
+    "registry",
+    "use_registry",
+]
 
 
 def __getattr__(name: str) -> object:
     """Resolve the public names of the package on first access."""
-    module = _LAZY_EXPORTS.get(name)
-    if module is None:
+    target = _LAZY_EXPORTS.get(name)
+    if target is None:
         msg = f"module 'smallcat' has no attribute {name!r}"
         raise AttributeError(msg)
-    value = getattr(importlib.import_module(module), name)
+    module, attribute = target
+    value = getattr(importlib.import_module(module), attribute)
     globals()[name] = value
     return value
 

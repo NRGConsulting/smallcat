@@ -1,0 +1,52 @@
+"""Enums that configure how a model reads and writes."""
+
+import contextlib
+from enum import StrEnum
+
+
+class ModelWriteMode(StrEnum):
+    """What a write does with the data that already exists.
+
+    Attributes:
+        APPEND: Add the rows to the existing data. Only formats that can append
+            support it (Delta tables).
+        OVERWRITE: Replace the existing data entirely.
+    """
+
+    APPEND = "append"
+    OVERWRITE = "overwrite"
+
+
+class ModelValidationMode(StrEnum):
+    """How strictly data must match the types declared by a model.
+
+    Attributes:
+        STRICT: A column whose type is not the declared kind is an error.
+        COERCE: Columns are cast to the declared types; it is an error only if
+            a value cannot be cast without loss.
+    """
+
+    STRICT = "strict"
+    COERCE = "coerce"
+
+
+def parse_enum[E: StrEnum](enum: type[E], value: object, what: str) -> E:
+    """Convert `value` to a member of `enum`, with a message that lists them.
+
+    Args:
+        enum: The enum class.
+        value: A member or its string value.
+        what: What is being parsed, for the message.
+
+    Returns:
+        The enum member.
+
+    Raises:
+        ValueError: If `value` is not a member of `enum`.
+    """
+    if isinstance(value, str):
+        with contextlib.suppress(ValueError):
+            return enum(value)
+    valid = ", ".join(repr(m.value) for m in enum)
+    msg = f"{value!r} is not a valid {what}; expected one of: {valid}"
+    raise ValueError(msg)

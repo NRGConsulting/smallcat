@@ -288,15 +288,26 @@ class Connections:
         Raises:
             ConnectionNotLoadedError: If no connection has that name.
         """
-        try:
-            item = self._items[name]
-        except KeyError:
-            available = ", ".join(self._items) or "none"
-            msg = f"Connection '{name}' is not loaded (available: {available})"
-            raise ConnectionNotLoadedError(msg) from None
+        self.require(name)
+        item = self._items[name]
         if isinstance(item, BaseConnectionSchema):
             return reveal_secrets(item.model_dump(by_alias=True, exclude_none=True))
         return item
+
+    def require(self, name: str) -> None:
+        """Check that a connection is loaded, without handing it out.
+
+        Args:
+            name: The connection name.
+
+        Raises:
+            ConnectionNotLoadedError: If no connection has that name. The
+                message lists the names that are loaded.
+        """
+        if name not in self._items:
+            available = ", ".join(self._items) or "none"
+            msg = f"Connection '{name}' is not loaded (available: {available})"
+            raise ConnectionNotLoadedError(msg)
 
     def names(self) -> list[str]:
         """Return the names of the loaded connections."""
