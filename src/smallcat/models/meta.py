@@ -11,7 +11,7 @@ storage in each environment.
 
         class Meta:
             location = "silver/customers"
-            file_format = "parquet"
+            file_format = ModelFileFormat.PARQUET   # or the string "parquet"
             allowed_write_modes = [ModelWriteMode.OVERWRITE]   # default: all
             validation_mode = ModelValidationMode.STRICT       # default
             load_options = {"hive_partitioning": True}
@@ -22,15 +22,18 @@ accept in a catalog (`sep`, `header`, `partition_by`, ...) and are validated
 against the same schemas.
 """
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from smallcat.catalog import CatalogEntry
-from smallcat.models.enums import ModelValidationMode, ModelWriteMode, parse_enum
+from smallcat.models.enums import (
+    ModelFileFormat,
+    ModelValidationMode,
+    ModelWriteMode,
+    parse_enum,
+)
 from smallcat.models.errors import ModelDefinitionError
-
-FileFormat = Literal["csv", "excel", "parquet", "delta_table"]
 
 META_ATTRIBUTES = (
     "location",
@@ -51,7 +54,8 @@ class ModelMeta(BaseModel):
 
     Attributes:
         location: Path of the data, relative to the connection's base.
-        file_format: `csv`, `excel`, `parquet` or `delta_table`.
+        file_format: A :class:`ModelFileFormat` (or its value: `csv`, `excel`,
+            `parquet`, `delta_table`).
         allowed_write_modes: The write modes the model permits. Empty means the
             model is read-only. By default every mode is allowed.
         validation_mode: How strictly data must match the declared types.
@@ -62,7 +66,7 @@ class ModelMeta(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     location: str = Field(min_length=1)
-    file_format: FileFormat
+    file_format: ModelFileFormat
     allowed_write_modes: frozenset[ModelWriteMode]
     validation_mode: ModelValidationMode = ModelValidationMode.STRICT
     load_options: dict[str, Any] | None = None
@@ -78,7 +82,7 @@ def _describe(prefix: str, error: ValidationError) -> list[str]:
         include_context=False,
     ):
         parts = [str(p) for p in err["loc"]]
-        if parts and parts[0] in ("csv", "excel", "parquet", "delta_table"):
+        if parts and parts[0] in {f.value for f in ModelFileFormat}:
             parts.pop(0)  # the format tag of the entry union
         lines.append(f"{'.'.join([prefix, *parts])}: {err['msg']}")
     return lines
@@ -95,6 +99,16 @@ def _parse_enums(values: dict[str, Any], problems: list[str]) -> None:
     except (ValueError, TypeError) as e:
         problems.append(f"Meta.allowed_write_modes: {e}")
         values["allowed_write_modes"] = frozenset()
+    if "file_format" in values:
+        try:
+            values["file_format"] = parse_enum(
+                ModelFileFormat,
+                values["file_format"],
+                "file format",
+            )
+        except ValueError as e:
+            problems.append(f"Meta.file_format: {e}")
+            del values["file_format"]
     if "validation_mode" in values:
         try:
             values["validation_mode"] = parse_enum(
@@ -157,7 +171,9 @@ def parse_meta(model_name: str, meta_class: type) -> ModelMeta:
 def _check_options(meta: ModelMeta) -> list[str]:
     """Validate the format options against the schemas the catalog uses."""
     problems = []
-    if meta.file_format == "delta_table" and "mode" in (meta.save_options or {}):
+    if meta.file_format is ModelFileFormat.DELTA_TABLE and "mode" in (
+        meta.save_options or {}
+    ):
         problems.append(
             "Meta.save_options.mode is not allowed: the write mode is chosen on "
             "each save (`objects.save(df, mode=...)`) and limited by "
@@ -186,7 +202,7 @@ def entry_dict(
         A dictionary a :class:`~smallcat.catalog.CatalogEntry` accepts.
     """
     return {
-        "file_format": meta.file_format,
+        "file_format": meta.file_format.value,
         "connection": connection,
         "location": meta.location,
         "load_options": meta.load_options,
@@ -213,11 +229,13 @@ def unsupported_reason(meta: ModelMeta, mode: ModelWriteMode) -> str | None:
     Returns:
         The reason, or `None` if the format supports the mode.
     """
-    if meta.file_format == "delta_table":
+    if meta.file_format is ModelFileFormat.DELTA_TABLE:
         return None
     if mode is ModelWriteMode.APPEND:
         return f"{meta.file_format} files cannot be appended to; only 'overwrite'"
-    if meta.file_format == "parquet" and (meta.save_options or {}).get("partition_by"):
+    if meta.file_format is ModelFileFormat.PARQUET and (meta.save_options or {}).get(
+        "partition_by",
+    ):
         return (
             "overwriting a partitioned Parquet dataset only adds files and keeps "
             "the old ones, so it would not replace the data; write without "

@@ -19,7 +19,7 @@ Example:
   >>> Customer.objects.save(df, mode=ModelWriteMode.OVERWRITE)
 """
 
-from smallcat.models.enums import ModelValidationMode, ModelWriteMode
+from smallcat.models.enums import ModelFileFormat, ModelValidationMode, ModelWriteMode
 from smallcat.models.errors import (
     ModelDefinitionError,
     ModelError,
@@ -45,6 +45,7 @@ __all__ = [
     "Model",
     "ModelDefinitionError",
     "ModelError",
+    "ModelFileFormat",
     "ModelManager",
     "ModelNotRegisteredError",
     "ModelQuery",

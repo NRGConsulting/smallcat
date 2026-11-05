@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from smallcat.connections_config import Connections
-from smallcat.models.enums import ModelWriteMode, parse_enum
+from smallcat.models.enums import ModelFileFormat, ModelWriteMode, parse_enum
 from smallcat.models.errors import ModelNotRegisteredError, ModelRegistrationError
 from smallcat.models.meta import ModelMeta, build_entry
 
@@ -172,7 +172,7 @@ class ModelRegistry:
         registration = self.get(model)
         meta: ModelMeta = model.__smallcat_meta__  # type: ignore[assignment]
         save_options = None
-        if write_mode is not None and meta.file_format == "delta_table":
+        if write_mode is not None and meta.file_format is ModelFileFormat.DELTA_TABLE:
             save_options = {**(meta.save_options or {}), "mode": write_mode.value}
         entry = build_entry(meta, registration.connection, save_options)
         entry.bind_connections(self._connections)
