@@ -172,8 +172,11 @@ class ModelQuery[M: "Model"]:
         pushed down to the storage. Other formats are read in full. A query
         with `where()` runs its SQL now and wraps the result.
 
-        Nulls in fields that are not optional, and values that cannot be cast
-        in `COERCE` mode, are only detected when the frame is collected.
+        Only the schema (columns and types) is checked here, since no data has
+        been read. Two checks need the data and are *not* made on a frame you
+        collect yourself: nulls in fields that are not optional (use `all()`
+        for that), and in `COERCE` mode a value that cannot be cast, which then
+        fails with a Polars error when the frame is collected.
 
         Returns:
             The LazyFrame, validated against the model's schema.

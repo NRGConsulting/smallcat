@@ -60,13 +60,18 @@ nav:
   - Get Started:
     - About: index.md
     - Catalog reference: catalog-reference.md
+    - Connections: connections.md
+    - Models: models.md
     # - Changelog: changelog.md
   - Examples:
     - Standalone: examples/standalone.md
     - Airflow: examples/airflow.md
     - Parquet on GCS: examples/gcs.md
+    - Models: examples/models.md
   - API reference:
     - Catalog: api/catalog.md
+    - Connections: api/connections.md
+    - Models: api/models.md
     - Datasets: api/datasets.md
   # - Modules:
     # - Apps:
