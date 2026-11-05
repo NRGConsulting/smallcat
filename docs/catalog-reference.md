@@ -169,20 +169,25 @@ connection:
     prefix: raw                # or base_uri: gs://my-bucket/raw
 ```
 
-Credentials depend on the engine that reads the format:
+Credentials depend on the engine that reads the data, which is not only a
+matter of the format: `load_*` and `scan_polars` use different engines for
+Parquet.
 
-| Formats                  | Engine | Credentials                                                     |
-|--------------------------|--------|-----------------------------------------------------------------|
-| `csv`, `parquet`, `excel` | DuckDB | HMAC keys: the connection's `login` (key id) and `password` (secret). |
-| `delta_table`            | delta-rs | Service account: `keyfile_dict`, `keyfile` or `key_path` in `extra`. |
+| Read with                    | Formats                   | Engine                | Credentials |
+|------------------------------|---------------------------|-----------------------|-------------|
+| `load_*`                     | `csv`, `parquet`, `excel` | DuckDB                | HMAC keys: the connection's `login` (key id) and `password` (secret). |
+| `load_*`                     | `delta_table`             | delta-rs              | Service account: `keyfile_dict`, `keyfile` or `key_path` in `extra`. |
+| `scan_polars`                | `parquet`                 | Polars                | Service account (same keys as above). |
+| `scan_polars`                | `delta_table`             | delta-rs and Polars   | Service account (same keys as above). |
+| `scan_polars`                | `csv`, `excel`            | DuckDB (eager)        | HMAC keys: they are loaded with `load_polars` and wrapped. |
 
 `google` is accepted as an alias of `google_cloud_platform` by every format.
 
 A connection can carry both kinds of credentials: each engine uses the one it
-understands, so the same connection serves CSV/Parquet/Excel and Delta datasets.
-A mismatch does not fail silently: a DuckDB-based dataset with only a service
-account, or a Delta dataset with only HMAC keys, emits a `UserWarning` and
-accesses the bucket without credentials.
+understands, so the same connection serves `load_*` and `scan_polars` on the
+same Parquet file. A mismatch does not fail silently: a DuckDB-based read with
+only a service account, or a delta-rs or Polars read with only HMAC keys, emits a
+`UserWarning` and accesses the bucket without credentials.
 
 Incoherent settings are rejected when the connection is validated (and again
 when a dataset uses an Airflow connection id):
@@ -191,8 +196,11 @@ when a dataset uses an Airflow connection id):
 * Only one of `keyfile_dict`, `keyfile` and `key_path` may be set.
 
 !!! note
-    DuckDB cannot authenticate with a service account, so CSV, Parquet and Excel
-    datasets on GCS need HMAC keys. Delta datasets need a service account.
+    DuckDB cannot authenticate with a service account, so `load_*` on CSV,
+    Parquet and Excel needs HMAC keys. Delta and every `scan_polars` on Parquet
+    need a service account. To use both ways of reading the same Parquet file,
+    put both kinds of credentials in the connection (see
+    [Parquet on GCS: load and scan](examples/gcs.md)).
 
 ### Amazon S3 (`aws`)
 
@@ -234,6 +242,7 @@ Combining static keys with `profile_name`, or giving only one of `login` and
 | Formats                   | Engine   | How the credential chain is resolved |
 |---------------------------|----------|--------------------------------------|
 | `csv`, `parquet`, `excel` | DuckDB   | By DuckDB's `aws` extension. |
+| `parquet` (`scan_polars`) | Polars   | By Polars itself, with the same rules as delta-rs below. |
 | `delta_table`             | delta-rs | By delta-rs itself (environment, web identity, ECS, instance profile). With `profile_name`, the credentials are resolved by DuckDB and handed to delta-rs; they are temporary and are not refreshed during a long operation. |
 
 Delta tables on S3 are written without DynamoDB locking, which relies on S3

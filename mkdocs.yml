@@ -64,6 +64,7 @@ nav:
   - Examples:
     - Standalone: examples/standalone.md
     - Airflow: examples/airflow.md
+    - Parquet on GCS: examples/gcs.md
   - API reference:
     - Catalog: api/catalog.md
     - Datasets: api/datasets.md
