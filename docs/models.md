@@ -35,6 +35,8 @@ Customer.objects.save(df, mode=ModelWriteMode.OVERWRITE)
 ```
 
 A complete, runnable example is in [Models on the local filesystem](examples/models.md).
+For the whole path, from loading the connection to filtering with `filter`,
+`where`, `all` and `lazy`, see [Models: from the connection to the filtered data](examples/models_query.md).
 
 ## `Meta`
 
@@ -123,6 +125,9 @@ with use_registry(test_registry):
 ```
 
 ## Reading
+
+The whole path, from the connection to the filtered data, is walked through in
+[Models: from the connection to the filtered data](examples/models_query.md).
 
 `Customer.objects` offers `all()`, `lazy()`, `as_models()`, `filter()`,
 `where()` and `select()`. The last three return a **query**: it is immutable

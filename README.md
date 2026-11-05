@@ -169,7 +169,8 @@ Customer.objects.save(df, mode=ModelWriteMode.OVERWRITE)               # mode is
   values that cannot be cast without loss).
 
 See [Models](https://nrgconsulting.github.io/smallcat/models/) and a runnable
-[example](https://nrgconsulting.github.io/smallcat/examples/models/).
+[example](https://nrgconsulting.github.io/smallcat/examples/models/) and a walk-through of
+[querying with `filter`, `where`, `all` and `lazy`](https://nrgconsulting.github.io/smallcat/examples/models_query/).
 
 ## Catalog reference
 

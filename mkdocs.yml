@@ -68,6 +68,7 @@ nav:
     - Airflow: examples/airflow.md
     - Parquet on GCS: examples/gcs.md
     - Models: examples/models.md
+    - "Models: querying": examples/models_query.md
   - API reference:
     - Catalog: api/catalog.md
     - Connections: api/connections.md
