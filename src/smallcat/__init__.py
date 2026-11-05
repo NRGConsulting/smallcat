@@ -54,3 +54,33 @@ In short, Smallcat unifies the way your code accesses data across file formats
 and environments—whether local, cloud, or orchestrated—while remaining simple,
 typed, and dependency-light.
 """
+
+import importlib
+import typing
+
+if typing.TYPE_CHECKING:
+    from smallcat.connections_config import Connections
+
+# Public names are resolved on first access, so `import smallcat` stays light:
+# it does not import Polars, DuckDB or Airflow.
+_LAZY_EXPORTS = {
+    "Connections": "smallcat.connections_config",
+}
+
+__all__ = ["Connections"]
+
+
+def __getattr__(name: str) -> object:
+    """Resolve the public names of the package on first access."""
+    module = _LAZY_EXPORTS.get(name)
+    if module is None:
+        msg = f"module 'smallcat' has no attribute {name!r}"
+        raise AttributeError(msg)
+    value = getattr(importlib.import_module(module), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    """List the public names, including the lazy ones."""
+    return sorted({*globals(), *_LAZY_EXPORTS})
