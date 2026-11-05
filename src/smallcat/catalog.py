@@ -6,12 +6,13 @@ catalog from a dictionary (which could be in an airflow variable).
 """
 
 import typing
+import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Annotated, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from smallcat._airflow import AIRFLOW_INSTALL_HINT, get_base_hook
 from smallcat.connections import (
@@ -19,6 +20,7 @@ from smallcat.connections import (
     SupportedConnectionSchemas,
     reveal_secrets,
 )
+from smallcat.connections_config import ConnectionNotLoadedError, Connections
 from smallcat.datasets.base_dataset import BaseDataset
 from smallcat.datasets.csv_dataset import CSVDataset, CSVLoadOptions, CSVSaveOptions
 from smallcat.datasets.delta_table_dataset import (
@@ -65,19 +67,42 @@ class EntryBase(BaseModel, ABC):
     )
     location: str = Field(..., description="Relative location of data")
 
+    _connections: Connections | None = PrivateAttr(default=None)
+
+    def bind_connections(self, connections: Connections | None) -> None:
+        """Resolve this entry's connection name against `connections`.
+
+        Once bound, a `connection` given as a string is looked up in
+        `connections` instead of being resolved through Airflow. Pass `None` to
+        go back to resolving it through Airflow.
+
+        Args:
+            connections: The loaded connections, or `None`.
+
+        Raises:
+            ConnectionNotLoadedError: If `connection` is a name that is not
+                loaded in `connections`.
+        """
+        if connections is not None and isinstance(self.connection, str):
+            connections.get(self.connection)  # fails here, not on first use
+        self._connections = connections
+
     def get_connection(self) -> dict | ConnectionProtocol:
         """Resolve and return the connection for this entry.
 
-        If `connection` is a string, it is treated as an Airflow connection ID
-        and resolved via `BaseHook.get_connection` (compatible with Airflow 2 and 3).
-        An inline connection is returned as a plain dictionary without the
-        fields that were left unset.
+        If `connection` is a string and connections were bound with
+        :meth:`bind_connections`, it is looked up there. Otherwise it is treated
+        as an Airflow connection ID and resolved via `BaseHook.get_connection`
+        (compatible with Airflow 2 and 3). An inline connection is returned as a
+        plain dictionary without the fields that were left unset.
 
         Returns:
             dict | ConnectionProtocol: A resolved connection object or dictionary
             usable by datasets.
         """
         if isinstance(self.connection, str):
+            if self._connections is not None:
+                return self._connections.get(self.connection)
             base_hook = get_base_hook()
             if base_hook is None:
                 msg = (
@@ -329,6 +354,13 @@ class Catalog(BaseModel):
     Excel). It can be constructed from an in-memory dictionary, an Airflow
     Variable (JSON), or a YAML file.
 
+    Connections are named: an entry's `connection` is the name of a connection
+    loaded in a :class:`~smallcat.connections_config.Connections`, which the
+    loaders accept as `connections=`. The names are checked when the catalog is
+    loaded. Without `connections=`, a name is resolved through Airflow on first
+    use, as before. Inline connections (a mapping instead of a name) are
+    deprecated because they put credentials in the catalog.
+
     Attributes:
         entries: Mapping of dataset names to their configurations.
     """
@@ -343,8 +375,57 @@ class Catalog(BaseModel):
         description="Named data sets",
     )
 
+    @model_validator(mode="after")
+    def _warn_inline_connections(self) -> "Catalog":
+        inline = [
+            k for k, e in self.entries.items() if not isinstance(e.connection, str)
+        ]
+        if inline:
+            warnings.warn(
+                f"Inline connections are deprecated: entries {sorted(inline)} define "
+                "their connection inline. Define it in a Connections (YAML or "
+                "Airflow) and reference it by name.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        return self
+
+    def bind_connections(self, connections: Connections | None) -> None:
+        """Resolve the entries' connection names against `connections`.
+
+        Every entry that names a connection is checked before any of them is
+        bound, so nothing changes if one is missing.
+
+        Args:
+            connections: The loaded connections, or `None` to resolve names
+                through Airflow again.
+
+        Raises:
+            ConnectionNotLoadedError: If an entry uses a connection name that is
+                not loaded. The message lists every such entry.
+        """
+        if connections is not None:
+            missing = [
+                f"entry '{key}' uses '{entry.connection}'"
+                for key, entry in self.entries.items()
+                if isinstance(entry.connection, str)
+                and entry.connection not in connections
+            ]
+            if missing:
+                available = ", ".join(connections.names()) or "none"
+                msg = (
+                    f"Connections not loaded: {'; '.join(missing)} "
+                    f"(available: {available})"
+                )
+                raise ConnectionNotLoadedError(msg)
+        for entry in self.entries.values():
+            entry.bind_connections(connections)
+
     @staticmethod
-    def from_dict(dictionary: dict) -> "Catalog":
+    def from_dict(
+        dictionary: dict,
+        connections: Connections | None = None,
+    ) -> "Catalog":
         """Create a catalog from a Python dictionary.
 
         The dictionary must conform to the `Catalog` schema (i.e., include an
@@ -352,17 +433,27 @@ class Catalog(BaseModel):
 
         Args:
             dictionary: A dictionary matching the `Catalog` model.
+            connections: Loaded connections that the entries' connection names
+                refer to. Each name is checked now.
 
         Returns:
             Catalog: A validated `Catalog` instance.
 
         Raises:
             pydantic.ValidationError: If the dictionary does not match the schema.
+            ConnectionNotLoadedError: If an entry names a connection that is not
+                in `connections`.
         """
-        return Catalog.model_validate(dictionary)
+        catalog = Catalog.model_validate(dictionary)
+        if connections is not None:
+            catalog.bind_connections(connections)
+        return catalog
 
     @staticmethod
-    def from_airflow_variable(variable_id: str) -> "Catalog":
+    def from_airflow_variable(
+        variable_id: str,
+        connections: Connections | None = None,
+    ) -> "Catalog":
         """Create a catalog from an Airflow Variable containing JSON.
 
         The Airflow Variable should contain a JSON object compatible with the
@@ -370,6 +461,8 @@ class Catalog(BaseModel):
 
         Args:
             variable_id: The Airflow Variable ID to read (expects JSON).
+            connections: Loaded connections that the entries' connection names
+                refer to. Each name is checked now.
 
         Returns:
             Catalog: A `Catalog` instance constructed from the Variable value.
@@ -377,6 +470,8 @@ class Catalog(BaseModel):
         Raises:
             KeyError: If the Airflow Variable does not exist.
             pydantic.ValidationError: If the JSON payload is invalid for the model.
+            ConnectionNotLoadedError: If an entry names a connection that is not
+                in `connections`.
         """
         try:
             from airflow.sdk import Variable
@@ -396,15 +491,20 @@ class Catalog(BaseModel):
             #  comms channel (SUPERVISOR_COMMS) to fetch it.
             msg = f"Variable {variable_id} not found in Airflow"
             raise KeyError(msg) from e
-        return Catalog.from_dict(dictionary_entries)
+        return Catalog.from_dict(dictionary_entries, connections=connections)
 
     @staticmethod
-    def from_yaml(dictionary_path: str | Path) -> "Catalog":
+    def from_yaml(
+        dictionary_path: str | Path,
+        connections: Connections | None = None,
+    ) -> "Catalog":
         """Create a catalog from a YAML file.
 
         Args:
             dictionary_path: Path to a YAML file whose content matches the
                 `Catalog` schema.
+            connections: Loaded connections that the entries' connection names
+                refer to. Each name is checked now.
 
         Returns:
             Catalog: A `Catalog` instance constructed from the YAML content.
@@ -412,10 +512,12 @@ class Catalog(BaseModel):
         Raises:
             FileNotFoundError: If the YAML file cannot be found.
             pydantic.ValidationError: If the YAML content is invalid for the model.
+            ConnectionNotLoadedError: If an entry names a connection that is not
+                in `connections`.
         """
         with Path(dictionary_path).open() as f:
             catalog_dict = yaml.safe_load(f)
-        return Catalog.from_dict(catalog_dict)
+        return Catalog.from_dict(catalog_dict, connections=connections)
 
     def _get_entry(self, key: str) -> EntryBase:
         try:
