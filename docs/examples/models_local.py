@@ -15,6 +15,7 @@ import polars as pl
 from smallcat import (
     Connections,
     Model,
+    ModelFileFormat,
     ModelRegistry,
     ModelWriteMode,
     registry,
@@ -49,7 +50,7 @@ class Customer(Model):
 
     class Meta:
         location = "silver/customers.parquet"
-        file_format = "parquet"
+        file_format = ModelFileFormat.PARQUET
         allowed_write_modes = [ModelWriteMode.OVERWRITE]  # a file is replaced whole
 
 
@@ -59,7 +60,7 @@ class Event(Model):
 
     class Meta:
         location = "silver/events"
-        file_format = "delta_table"  # Delta can also append
+        file_format = ModelFileFormat.DELTA_TABLE  # Delta can also append
 
 
 class Report(Model):
@@ -68,7 +69,7 @@ class Report(Model):
 
     class Meta:
         location = "gold/report.parquet"
-        file_format = "parquet"
+        file_format = ModelFileFormat.PARQUET
         allowed_write_modes = []  # read-only
 
 
@@ -81,7 +82,10 @@ for model in (Customer, Event, Report):
 Customer.objects.save(
     [
         Customer(
-            id=1, name="Ada", email="ada@example.com", created_at=datetime(2024, 1, 5),
+            id=1,
+            name="Ada",
+            email="ada@example.com",
+            created_at=datetime(2024, 1, 5),
         ),
         Customer(id=2, name="Linus", created_at=datetime(2024, 3, 9)),
         Customer(
@@ -94,10 +98,12 @@ Customer.objects.save(
     mode=ModelWriteMode.OVERWRITE,
 )
 Event.objects.save(
-    pl.DataFrame({"id": [1], "kind": ["signup"]}), mode=ModelWriteMode.APPEND,
+    pl.DataFrame({"id": [1], "kind": ["signup"]}),
+    mode=ModelWriteMode.APPEND,
 )
 Event.objects.save(
-    pl.DataFrame({"id": [2], "kind": ["login"]}), mode=ModelWriteMode.APPEND,
+    pl.DataFrame({"id": [2], "kind": ["login"]}),
+    mode=ModelWriteMode.APPEND,
 )
 
 # 5. Read. -----------------------------------------------------------------------
@@ -139,7 +145,8 @@ for label, action in {
         mode=ModelWriteMode.OVERWRITE,
     ),
     "append, which the model does not allow": lambda: Customer.objects.save(
-        [], mode=ModelWriteMode.APPEND,
+        [],
+        mode=ModelWriteMode.APPEND,
     ),
     "write a read-only model": lambda: Report.objects.save(
         pl.DataFrame({"id": [1], "total": [1.0]}),

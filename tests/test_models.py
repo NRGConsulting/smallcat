@@ -15,6 +15,7 @@ from smallcat.connections_config import (
 )
 from smallcat.models import (
     Model,
+    ModelFileFormat,
     ModelDefinitionError,
     ModelNotRegisteredError,
     ModelQueryError,
@@ -152,6 +153,37 @@ def test_meta_accepts_strings_for_the_enums():
 
     assert M.__smallcat_meta__.allowed_write_modes == {OVERWRITE}
     assert M.__smallcat_meta__.validation_mode is ModelValidationMode.COERCE
+
+
+def test_file_format_is_a_model_file_format():
+    assert Person.__smallcat_meta__.file_format is ModelFileFormat.PARQUET
+    assert Event.__smallcat_meta__.file_format is ModelFileFormat.DELTA_TABLE
+    assert Readings.__smallcat_meta__.file_format is ModelFileFormat.CSV
+
+
+@pytest.mark.parametrize("member", list(ModelFileFormat))
+def test_file_format_accepts_the_enum_and_its_string(member):
+    for value in (member, member.value):
+        model = _define(location="x", file_format=value)
+        assert model.__smallcat_meta__.file_format is member
+
+
+def test_file_format_enum_values():
+    assert {f.value for f in ModelFileFormat} == {"csv", "excel", "parquet", "delta_table"}
+
+
+def test_an_invalid_file_format_lists_the_valid_ones():
+    with pytest.raises(ModelDefinitionError) as exc:
+        _define(location="x", file_format="json")
+    message = str(exc.value)
+    assert "Meta.file_format: 'json' is not a valid file format" in message
+    for value in ("csv", "excel", "parquet", "delta_table"):
+        assert repr(value) in message
+
+
+def test_a_file_format_that_is_not_a_string_is_rejected():
+    with pytest.raises(ModelDefinitionError, match="file format"):
+        _define(location="x", file_format=3)
 
 
 def test_a_model_without_meta_is_abstract():

@@ -17,6 +17,22 @@ class ModelWriteMode(StrEnum):
     OVERWRITE = "overwrite"
 
 
+class ModelFileFormat(StrEnum):
+    """The file format a model's data is stored in.
+
+    Attributes:
+        CSV: Comma-separated values.
+        EXCEL: An `.xlsx` workbook.
+        PARQUET: Parquet, a single file or a directory.
+        DELTA_TABLE: A Delta Lake table.
+    """
+
+    CSV = "csv"
+    EXCEL = "excel"
+    PARQUET = "parquet"
+    DELTA_TABLE = "delta_table"
+
+
 class ModelValidationMode(StrEnum):
     """How strictly data must match the types declared by a model.
 

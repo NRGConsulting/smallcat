@@ -142,7 +142,7 @@ model. The model never names a connection: the registry does, per environment.
 
 ```python
 import polars as pl
-from smallcat import Connections, Model, ModelWriteMode, registry
+from smallcat import Connections, Model, ModelFileFormat, ModelWriteMode, registry
 
 class Customer(Model):
     id: int
@@ -151,7 +151,7 @@ class Customer(Model):
 
     class Meta:
         location = "silver/customers"
-        file_format = "parquet"
+        file_format = ModelFileFormat.PARQUET
 
 registry.load_connections(Connections.from_yaml("connections.yaml"))
 registry.register(Customer, connection="lake")

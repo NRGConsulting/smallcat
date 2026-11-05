@@ -62,6 +62,7 @@ if typing.TYPE_CHECKING:
     from smallcat.connections_config import Connections
     from smallcat.models import (
         Model,
+        ModelFileFormat,
         ModelRegistry,
         ModelValidationMode,
         ModelWriteMode,
@@ -74,6 +75,7 @@ if typing.TYPE_CHECKING:
 _LAZY_EXPORTS = {
     "Connections": ("smallcat.connections_config", "Connections"),
     "Model": ("smallcat.models", "Model"),
+    "ModelFileFormat": ("smallcat.models", "ModelFileFormat"),
     "ModelRegistry": ("smallcat.models", "ModelRegistry"),
     "ModelValidationMode": ("smallcat.models", "ModelValidationMode"),
     "ModelWriteMode": ("smallcat.models", "ModelWriteMode"),
@@ -84,6 +86,7 @@ _LAZY_EXPORTS = {
 __all__ = [
     "Connections",
     "Model",
+    "ModelFileFormat",
     "ModelRegistry",
     "ModelValidationMode",
     "ModelWriteMode",

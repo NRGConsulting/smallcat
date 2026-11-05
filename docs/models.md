@@ -6,7 +6,7 @@ dataset as Polars DataFrames, validated against the model.
 
 ```python
 from datetime import datetime
-from smallcat import Model, ModelWriteMode
+from smallcat import Model, ModelFileFormat, ModelWriteMode
 
 class Customer(Model):
     id: int
@@ -16,7 +16,7 @@ class Customer(Model):
 
     class Meta:
         location = "silver/customers"
-        file_format = "parquet"
+        file_format = ModelFileFormat.PARQUET
 ```
 
 A model does not say which connection it uses. That is decided when it is
@@ -47,7 +47,7 @@ reported together.
 | Attribute | Required | Description |
 |-----------|----------|-------------|
 | `location` | yes | Path of the data, relative to the connection's base. |
-| `file_format` | yes | `csv`, `excel`, `parquet` or `delta_table`. |
+| `file_format` | yes | A `ModelFileFormat`: `CSV`, `EXCEL`, `PARQUET` or `DELTA_TABLE`. The string (`"parquet"`) is accepted too. Any other value is rejected, listing the valid ones. |
 | `allowed_write_modes` | no | The [write modes](#writing) the model permits. By default all of them. `[]` makes the model read-only. |
 | `validation_mode` | no | `ModelValidationMode.STRICT` (default) or `COERCE`. See [Validation](#validation). |
 | `load_options` | no | Format options applied when reading. |

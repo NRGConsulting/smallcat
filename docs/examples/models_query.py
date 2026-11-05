@@ -11,7 +11,7 @@ from pathlib import Path
 
 import polars as pl
 
-from smallcat import Connections, Model, ModelWriteMode, registry
+from smallcat import Connections, Model, ModelFileFormat, ModelWriteMode, registry
 from smallcat.models import ModelQueryError
 
 workdir = Path(tempfile.mkdtemp(prefix="smallcat-query-"))
@@ -47,7 +47,7 @@ class Order(Model):
 
     class Meta:
         location = "sales/orders.parquet"
-        file_format = "parquet"
+        file_format = ModelFileFormat.PARQUET
 
 
 registry.load_connections(connections)
