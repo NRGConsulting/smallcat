@@ -60,7 +60,8 @@ class Event(Model):
 
     class Meta:
         location = "silver/events"
-        file_format = ModelFileFormat.DELTA_TABLE  # Delta can also append
+        file_format = ModelFileFormat.DELTA_TABLE  # Delta can also append and merge
+        merge_keys = ["id"]  # what identifies a row for mode="merge"
 
 
 class Report(Model):
@@ -105,6 +106,11 @@ Event.objects.save(
     pl.DataFrame({"id": [2], "kind": ["login"]}),
     mode=ModelWriteMode.APPEND,
 )
+# Merge: id 2 exists, so it is updated; id 3 is new, so it is inserted.
+Event.objects.save(
+    pl.DataFrame({"id": [2, 3], "kind": ["logout", "purchase"]}),
+    mode=ModelWriteMode.MERGE,
+)
 
 # 5. Read. -----------------------------------------------------------------------
 print("-- all customers")
@@ -127,7 +133,7 @@ print(Customer.objects.where("email IS NOT NULL").select("name").all().sort("nam
 print("-- as model instances")
 print(Customer.objects.filter(pl.col("id") == 1).as_models())
 
-print("-- events (appended twice)")
+print("-- events (appended twice, then merged)")
 print(Event.objects.all().sort("id"))
 
 # 6. What the guard rails refuse. -------------------------------------------------

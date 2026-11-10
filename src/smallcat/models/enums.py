@@ -11,10 +11,14 @@ class ModelWriteMode(StrEnum):
         APPEND: Add the rows to the existing data. Only formats that can append
             support it (Delta tables).
         OVERWRITE: Replace the existing data entirely.
+        MERGE: Insert the rows whose key is new and update the ones whose key
+            already exists, by `merge_keys`. Nothing is deleted. Only Delta
+            tables support it.
     """
 
     APPEND = "append"
     OVERWRITE = "overwrite"
+    MERGE = "merge"
 
 
 class ModelFileFormat(StrEnum):

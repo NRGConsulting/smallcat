@@ -13,6 +13,7 @@ storage in each environment.
             location = "silver/customers"
             file_format = ModelFileFormat.PARQUET   # or the string "parquet"
             allowed_write_modes = [ModelWriteMode.OVERWRITE]   # default: all
+            merge_keys = ["id"]            # Delta only; used by mode="merge"
             validation_mode = ModelValidationMode.STRICT       # default
             load_options = {"hive_partitioning": True}
             save_options = {}
@@ -39,6 +40,7 @@ META_ATTRIBUTES = (
     "location",
     "file_format",
     "allowed_write_modes",
+    "merge_keys",
     "validation_mode",
     "load_options",
     "save_options",
@@ -58,6 +60,9 @@ class ModelMeta(BaseModel):
             `parquet`, `delta_table`).
         allowed_write_modes: The write modes the model permits. Empty means the
             model is read-only. By default every mode is allowed.
+        merge_keys: Fields that identify a row when saving with mode `merge`
+            (Delta tables only). A call to `save(..., merge_keys=...)` takes
+            precedence. They are checked against the fields at registration.
         validation_mode: How strictly data must match the declared types.
         load_options: Format options applied when reading.
         save_options: Format options applied when writing.
@@ -68,6 +73,7 @@ class ModelMeta(BaseModel):
     location: str = Field(min_length=1)
     file_format: ModelFileFormat
     allowed_write_modes: frozenset[ModelWriteMode]
+    merge_keys: tuple[str, ...] | None = None
     validation_mode: ModelValidationMode = ModelValidationMode.STRICT
     load_options: dict[str, Any] | None = None
     save_options: dict[str, Any] | None = None
@@ -179,6 +185,15 @@ def _check_options(meta: ModelMeta) -> list[str]:
             "each save (`objects.save(df, mode=...)`) and limited by "
             "`allowed_write_modes`",
         )
+    if meta.merge_keys is not None and meta.file_format is not ModelFileFormat.DELTA_TABLE:
+        problems.append(
+            "Meta.merge_keys is only valid for delta_table "
+            f"(file_format is {meta.file_format.value!r})",
+        )
+    if "merge_keys" in (meta.save_options or {}):
+        problems.append(
+            "Meta.save_options.merge_keys is not allowed: use Meta.merge_keys",
+        )
     try:
         _ENTRY_ADAPTER.validate_python(entry_dict(meta, "meta-check"))
     except ValidationError as e:
@@ -231,6 +246,11 @@ def unsupported_reason(meta: ModelMeta, mode: ModelWriteMode) -> str | None:
     """
     if meta.file_format is ModelFileFormat.DELTA_TABLE:
         return None
+    if mode is ModelWriteMode.MERGE:
+        return (
+            f"{meta.file_format} files cannot be merged by key; "
+            "only Delta tables support 'merge'"
+        )
     if mode is ModelWriteMode.APPEND:
         return f"{meta.file_format} files cannot be appended to; only 'overwrite'"
     if meta.file_format is ModelFileFormat.PARQUET and (meta.save_options or {}).get(

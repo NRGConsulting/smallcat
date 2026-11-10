@@ -23,6 +23,9 @@ def test_the_models_example_runs_and_the_guard_rails_refuse():
     assert result.returncode == 0, result.stderr
     out = result.stdout
     assert "SELECTION: col(\"id\") > 1" in out  # the filter reached the scan
+    assert "-- events (appended twice, then merged)" in out
+    assert "│ 2   ┆ logout   │" in out  # merge updated id 2
+    assert "│ 3   ┆ purchase │" in out  # and inserted id 3
     assert "[wrong types] ModelSchemaValidationError" in out
     assert "[append, which the model does not allow] ModelWriteNotAllowedError" in out
     assert "[write a read-only model] ModelWriteNotAllowedError" in out
