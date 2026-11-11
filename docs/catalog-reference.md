@@ -46,10 +46,43 @@ entries:
 | `csv`         | `columns`, `sep`, `header`, `sample_size`, `all_varchar`                    | `header`, `sep`, `overwrite`                          |
 | `parquet`     | `binary_as_string`, `file_row_number`, `hive_partitioning`, `union_by_name` | `overwrite`, `partition_by`, `write_partition_columns` |
 | `excel`       | `header`, `sheet`, `range`, `all_varchar`, `empty_as_varchar`               | `header`, `sheet`                                     |
-| `delta_table` | `version`, `without_files`, `log_buffer_size`                               | `mode`, `partition_by`, `schema_mode`                 |
+| `delta_table` | `version`, `without_files`, `log_buffer_size`                               | `mode`, `partition_by`, `schema_mode`, `merge_keys`, `update_columns` |
 
 Boolean options are always forwarded, so `header: false` really turns the
 header off.
+
+### Delta: `mode: merge`
+
+`mode` is `append`, `overwrite`, `ignore` or `merge`. With `merge`, rows are
+matched on `merge_keys`: the ones that match are updated and the new ones are
+inserted.
+
+```yaml
+entries:
+  customers:
+    file_format: delta_table
+    connection: datalake_gcs
+    location: silver/customers
+    save_options:
+      mode: merge
+      merge_keys: [id]
+      update_columns: [name, email]   # optional; default: every column but the keys
+```
+
+* `merge_keys` is required with `merge` and not allowed with other modes. The
+  keys are never updated.
+* `update_columns` (optional) limits which columns are overwritten on matching
+  rows; new rows are always inserted whole. It cannot include a key.
+* If the table does not exist, the first `save_polars` creates it.
+* The data must not contain null or repeated keys (it fails before writing) and
+  its columns must already exist in the table. `schema_mode` is not supported
+  with `merge`.
+* `merge` **never deletes** rows
+  ([#32](https://github.com/NRGConsulting/smallcat/issues/32) tracks deletion).
+* It is only available for `delta_table`; Databricks-hosted tables are not
+  supported.
+* `DeltaTableDataset.update(path, predicate, values)` sets columns to constant
+  values on the rows a predicate selects (it is not exposed on the catalog).
 
 ## Validation
 

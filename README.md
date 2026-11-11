@@ -162,7 +162,10 @@ Customer.objects.save(df, mode=ModelWriteMode.OVERWRITE)               # mode is
 ```
 
 * `mode` is required: `OVERWRITE` replaces the whole dataset, `APPEND` adds rows
-  (Delta only). There is no upsert.
+  and `MERGE` inserts the rows with a new key and updates the ones whose key
+  exists (both Delta only; `MERGE` never deletes). Declare the key in
+  `Meta.merge_keys = ["id"]` or pass it with
+  `save(df, mode="merge", merge_keys=["id"])`.
 * `allowed_write_modes` in `Meta` limits what a model may do (`[]` is read-only);
   registering can restrict it further per environment, never widen it.
 * `validation_mode` is `STRICT` (types must match) or `COERCE` (cast, failing only on

@@ -42,19 +42,22 @@ simple π 1/1 ["name"]
   ESTIMATED ROWS: 3
 ```
 
-The Delta model was appended to twice, so it holds both rows:
+The Delta model was appended to twice and then merged by `id`: row 2 already
+existed, so it was updated (`login` became `logout`), and row 3 was new, so it
+was inserted. Nothing was deleted:
 
 ```text
--- events (appended twice)
-shape: (2, 2)
-┌─────┬────────┐
-│ id  ┆ kind   │
-│ --- ┆ ---    │
-│ i64 ┆ str    │
-╞═════╪════════╡
-│ 1   ┆ signup │
-│ 2   ┆ login  │
-└─────┴────────┘
+-- events (appended twice, then merged)
+shape: (3, 2)
+┌─────┬──────────┐
+│ id  ┆ kind     │
+│ --- ┆ ---      │
+│ i64 ┆ str      │
+╞═════╪══════════╡
+│ 1   ┆ signup   │
+│ 2   ┆ logout   │
+│ 3   ┆ purchase │
+└─────┴──────────┘
 ```
 
 And what is refused, each one *before* anything is written or read:
