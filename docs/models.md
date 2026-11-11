@@ -139,6 +139,7 @@ Customer.objects.filter(pl.col("id") > 10).all()
 Customer.objects.select("id", "name").all()
 Customer.objects.filter(pl.col("id") > 10).select("name").lazy()   # pl.LazyFrame
 Customer.objects.where("id > 10 AND email IS NOT NULL").all()
+Customer.objects.where(id__gt=10, email__isnull=False).all()   # the same, as lookups
 Customer.objects.filter(pl.col("id") == 1).as_models()      # list[Customer]
 ```
 
@@ -148,8 +149,11 @@ Customer.objects.filter(pl.col("id") == 1).as_models()      # list[Customer]
 | `lazy()` | `pl.LazyFrame` | Chain more Polars after it. See below. |
 | `as_models()` | `list[Customer]` | Each row is validated by Pydantic, so field constraints apply. Cannot be combined with `select()`. |
 | `filter(*exprs)` | query | Polars expressions; several calls are combined with AND. |
-| `where(sql)` | query | An SQL predicate (DuckDB). Usable once: join conditions with `AND` in one string. |
+| `where(sql=None, **lookups)` | query | An SQL predicate (DuckDB) and/or Django-style lookups such as `id__gte=10`. Usable once per query. See [Querying models](querying-models.md). |
 | `select(*fields)` | query | Only some fields; names must be fields of the model. |
+
+Every way of filtering, with the operators and their restrictions, is in
+[Querying models](querying-models.md).
 
 ### `filter` or `where`, never both
 

@@ -62,6 +62,8 @@ nav:
     - Catalog reference: catalog-reference.md
     - Connections: connections.md
     - Models: models.md
+    - Querying models: querying-models.md
+    - Querying a catalog: querying-catalog.md
     # - Changelog: changelog.md
   - Examples:
     - Standalone: examples/standalone.md

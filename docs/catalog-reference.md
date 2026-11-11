@@ -273,7 +273,8 @@ when the catalog is loaded.
 example `amount > 10 AND name IN ('a', 'b')`. It is parsed before it runs and a
 `ValueError` is raised for statements, comments left open, subqueries or
 anything that changes the shape of the query. `columns` accepts plain column
-names only.
+names only. Examples of every way of reading, from the connection to the
+result, are in [Querying a catalog](querying-catalog.md).
 
 ## Extensions and network access
 
