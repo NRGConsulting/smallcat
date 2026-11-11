@@ -28,7 +28,7 @@ import re
 import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 import duckdb
 import polars as pl
@@ -121,11 +121,7 @@ def _contains_subquery(node: object) -> bool:
     return False
 
 
-L = TypeVar("L", bound=BaseModel)  # Load options model
-S = TypeVar("S", bound=BaseModel)  # Save options model
-
-
-class BaseDataset(ABC, Generic[L, S]):
+class BaseDataset[L: BaseModel, S: BaseModel](ABC):
     """Base class for dataset loaders/savers backed by DuckDB and a connection.
 
     This class:

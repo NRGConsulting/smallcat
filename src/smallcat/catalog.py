@@ -476,7 +476,7 @@ class Catalog(BaseModel):
         try:
             from airflow.sdk import Variable
         except ImportError:
-            from airflow.models import Variable  # type: ignore[attr-defined,no-redef] # noqa: I001
+            from airflow.models import Variable  # type: ignore[attr-defined,no-redef]
 
         try:
             dictionary_entries = Variable.get(variable_id, deserialize_json=True)
