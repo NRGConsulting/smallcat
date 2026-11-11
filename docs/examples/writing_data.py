@@ -69,6 +69,11 @@ entries:
     connection: lake
     location: people
     save_options: {mode: ignore}
+  countries_seed:
+    file_format: delta_table
+    connection: lake
+    location: countries
+    save_options: {mode: ignore}
   people_upsert:
     file_format: delta_table
     connection: lake
@@ -108,6 +113,13 @@ catalog.save_polars(
 print("merge          ", rows(catalog.load_polars("people_upsert")))
 catalog.save_polars("people_upsert_city", people((1, "IGNORED", "Seville")))
 print("merge (city)   ", rows(catalog.load_polars("people_upsert_city")))
+
+title("catalog: ignore, a load that is safe to run twice")
+seed = pl.DataFrame({"code": ["ES", "FI"], "name": ["Spain", "Finland"]})
+catalog.save_polars("countries_seed", seed)  # the table does not exist: created
+print("first run      ", catalog.load_polars("countries_seed").height, "rows")
+catalog.save_polars("countries_seed", seed.head(1))  # it exists: nothing happens
+print("second run     ", catalog.load_polars("countries_seed").height, "rows")
 
 title("catalog: update rows by a predicate")
 people_table = catalog.get_dataset("people_replace")

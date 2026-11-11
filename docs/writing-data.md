@@ -14,7 +14,7 @@ output below is what it prints.
 |------|-------------------------|---------|
 | `overwrite` | Replaces the whole dataset with what you write. | every format |
 | `append` | Adds the rows. | `delta_table` |
-| `ignore` | Writes only if the table does not exist; otherwise does nothing. | `delta_table` (catalog only) |
+| `ignore` | Writes only if the table does not exist; otherwise does nothing (see [`ignore`](#ignore-a-load-that-is-safe-to-run-twice)). | `delta_table` (catalog only) |
 | `merge` | Inserts the rows whose key is new and updates the ones whose key exists. Never deletes. | `delta_table` |
 | *update* | Sets columns on the rows a predicate selects. Not a save mode: a separate method. | `delta_table` |
 
@@ -92,6 +92,45 @@ merge (city)    [(1, 'ada', 'Seville'), (2, 'linus', 'Helsinki'), (3, 'grace', '
 * `merge (city)` matched id 1 and changed only the city: the name sent
   (`IGNORED`) was left out because of `update_columns`.
 
+### `ignore`: a load that is safe to run twice
+
+`ignore` writes only if the table **does not exist**. If it does, the save does
+nothing, and it does not fail. It is for data that must be loaded once and never
+overwritten: seed data, reference tables, the first load of a table that a
+`merge` keeps up to date afterwards.
+
+```yaml
+entries:
+  countries_seed:
+    file_format: delta_table
+    connection: lake
+    location: countries
+    save_options: {mode: ignore}
+```
+
+```python
+catalog.save_polars("countries_seed", seed)           # no table yet: created
+catalog.save_polars("countries_seed", seed.head(1))   # it exists: nothing happens
+```
+
+```text
+first run       2 rows
+second run      2 rows
+```
+
+The second call carried different data and it was **dropped silently**. That is
+the point, and the risk: `ignore` never tells you it skipped the write, and it
+does not compare the data, so a changed source is not picked up. To refresh the
+rows, use `merge`; to replace them, `overwrite`.
+
+| If the table... | `overwrite` | `append` | `ignore` | `merge` |
+|-----------------|-------------|----------|----------|---------|
+| does not exist | creates it | creates it | creates it | creates it |
+| exists | replaces it | adds rows | **does nothing** | updates and inserts by key |
+
+`ignore` is a catalog mode only: a model has no `ignore`, and `merge` already
+gives a load that can be repeated without duplicates.
+
 ### Updating rows by a predicate
 
 `update` sets columns to constant values on the rows a predicate selects. It lives
@@ -161,7 +200,7 @@ to 9) instead of inserted again.
 
 ### Updating rows
 
-There is no `update` on `objects` yet. Use the Delta dataset of the model's entry;
+There is no `update` on `objects` yet ([#36](https://github.com/NRGConsulting/smallcat/issues/36)). Use the Delta dataset of the model's entry;
 its path is the model's `Meta.location`:
 
 ```python
@@ -224,7 +263,7 @@ it. Use it to give a production job `merge` only, so it cannot replace the table
 | Add new rows, never touching old ones | `append` (Delta) |
 | Load once, never overwrite a table that exists | `ignore` (catalog, Delta) |
 | Keep a table in step with a source, by key | `merge` (Delta) |
-| Change a column on some rows, whatever the data | `update` (Delta, dataset) |
+| Change a column on some rows, whatever the data | `update` (Delta, dataset; [#36](https://github.com/NRGConsulting/smallcat/issues/36) tracks exposing it) |
 | Delete rows | Not available yet: [#32](https://github.com/NRGConsulting/smallcat/issues/32) |
 
 ## The script

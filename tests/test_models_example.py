@@ -133,6 +133,8 @@ def test_the_writing_page_prints_what_it_documents():
         in out
     )
     assert "(1, 'ada', 'Seville')" in out  # update_columns kept the name
+    assert "first run       2 rows" in out
+    assert "second run      2 rows" in out  # ignore: the second save did nothing
     assert "rows updated    1" in out
     assert "(9, 'grace', 'Austin')" in out  # merged by name
     assert "overwrite       [(2, 'linus', 'Oslo')]" in out
