@@ -1,7 +1,7 @@
 [project]
 name = "smallcat-chonk"
 dynamic = ["version"]
-description = "Add your description here"
+description = "A small, modular data catalog."
 readme = "README.md"
 requires-python = ">=3.12,!=3.15"
 dependencies = [
