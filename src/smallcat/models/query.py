@@ -6,10 +6,12 @@
     Customer.objects.filter(pl.col("id") > 10).select("id", "name").all()
     Customer.objects.filter(pl.col("id") > 10).lazy().group_by("name").len()
     Customer.objects.where("id > 10").as_models()
+    Customer.objects.where(id__gt=10, country="ES").all()
 
 There are two ways to filter and they cannot be combined in one query:
 `filter()` takes Polars expressions and `where()` takes an SQL predicate
-(DuckDB). `select()` combines with either.
+(DuckDB), written by hand (`sql=`) or as Django-style lookups (`id__gt=10`).
+`select()` combines with either.
 """
 
 from collections.abc import Sequence
@@ -24,6 +26,7 @@ from smallcat.models.errors import (
     ModelUnsupportedWriteModeError,
     ModelWriteNotAllowedError,
 )
+from smallcat.models.lookups import lookups_to_sql
 from smallcat.models.meta import ModelMeta, unsupported_reason
 from smallcat.models.registry import current_registry
 from smallcat.models.schema import (
@@ -109,29 +112,49 @@ class ModelQuery[M: "Model"]:
             raise ModelQueryError(_MIXED)
         return replace(self, filters=(*self.filters, *predicates))
 
-    def where(self, sql: str) -> Self:
-        """Keep the rows that satisfy an SQL predicate (DuckDB).
+    def where(self, sql: str | None = None, **lookups: Any) -> Self:  # noqa: ANN401
+        """Keep the rows that satisfy an SQL predicate and/or lookups.
+
+        Lookups are Django-style: ``field=value`` or ``field__operator=value``
+        (see :mod:`smallcat.models.lookups` for the operators). They are checked
+        against the model's fields and types right here. Several conditions are
+        joined with AND, and so are `sql` and the lookups when both are given.
 
         Args:
-            sql: The predicate, e.g. `"id > 10 AND name = 'a'"`. It can be used
-                once: put every condition in the same string.
+            sql: An SQL predicate (DuckDB), e.g. `"id > 10 OR name = 'a'"`. It
+                can also be passed as the first positional argument. To filter
+                a field that is itself called `sql`, write `sql__exact=...`.
+            **lookups: The lookups, e.g. `job_id__lte=2, country="ES"`.
 
         Returns:
             A new query.
 
         Raises:
-            ModelQueryError: If the predicate is empty, `where()` was already
-                used, or the query already uses `filter()`.
+            ModelQueryError: If there is neither an SQL predicate nor lookups,
+                the predicate is empty, a lookup is not valid for the model,
+                `where()` was already used, or the query already uses
+                `filter()`.
         """
-        if not isinstance(sql, str) or not sql.strip():
+        if sql is None and not lookups:
+            msg = "where() takes an SQL predicate (sql='...') or lookups (id__gt=1)"
+            raise ModelQueryError(msg)
+        if sql is not None and (not isinstance(sql, str) or not sql.strip()):
             msg = "where() takes a non-empty SQL predicate string"
             raise ModelQueryError(msg)
         if self.filters:
             raise ModelQueryError(_MIXED)
         if self.where_sql is not None:
-            msg = "where() was already used: join the conditions with AND in one string"
+            msg = (
+                "where() was already used: put every condition in one call "
+                "(joined with AND)"
+            )
             raise ModelQueryError(msg)
-        return replace(self, where_sql=sql)
+        if not lookups:
+            return replace(self, where_sql=sql)
+        spec: ModelSchema = self.model.__smallcat_schema__  # type: ignore[assignment]
+        rendered = lookups_to_sql(spec, lookups)
+        combined = rendered if sql is None else f"({sql}) AND ({rendered})"
+        return replace(self, where_sql=combined)
 
     def select(self, *names: str) -> Self:
         """Read only some of the model's fields.
@@ -324,9 +347,9 @@ class ModelManager[M: "Model"]:
         """Start a query with Polars predicates. See :meth:`ModelQuery.filter`."""
         return self._query().filter(*predicates)
 
-    def where(self, sql: str) -> ModelQuery[M]:
-        """Start a query with an SQL predicate. See :meth:`ModelQuery.where`."""
-        return self._query().where(sql)
+    def where(self, sql: str | None = None, **lookups: Any) -> ModelQuery[M]:  # noqa: ANN401
+        """Start a query with SQL and/or lookups. See :meth:`ModelQuery.where`."""
+        return self._query().where(sql, **lookups)
 
     def select(self, *names: str) -> ModelQuery[M]:
         """Start a query on some fields. See :meth:`ModelQuery.select`."""

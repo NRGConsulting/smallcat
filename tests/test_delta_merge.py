@@ -1,15 +1,18 @@
 """Delta `merge` (upsert by key) and `update` by predicate."""
 
 from datetime import date
+from pathlib import Path
 
 import polars as pl
 import pyarrow as pa
 import pytest
 from pydantic import ValidationError
 
+from smallcat.catalog import Catalog
 from smallcat.datasets.delta_table_dataset import (
     DeltaTableDataset,
     DeltaTableSaveOptions,
+    WriteMode,
 )
 
 PATH = "customers"
@@ -167,6 +170,14 @@ def test_column_names_that_look_like_sql_are_quoted(local_conn):
         {"mode": "merge", "merge_keys": ["id"], "schema_mode": "merge"},
         {"mode": "append", "merge_keys": ["id"]},
         {"mode": "overwrite", "update_columns": ["a"]},
+        {"mode": "ignore", "merge_keys": ["id"]},
+        {"mode": "append", "merge_keys": []},  # an empty list is still set
+        {"mode": "append", "update_columns": []},
+        # no mode at all is not "merge" either
+        {"merge_keys": ["id"]},
+        {"update_columns": ["a"]},
+        {"merge_keys": []},
+        {"merge_keys": ["id"], "update_columns": ["a"]},
     ],
 )
 def test_invalid_merge_options_are_rejected(options):
@@ -174,14 +185,49 @@ def test_invalid_merge_options_are_rejected(options):
         DeltaTableSaveOptions(**options)
 
 
-def test_merge_options_without_a_mode_do_not_write(local_conn):
-    ds = _ds(local_conn, merge_keys=["id"])
+@pytest.mark.parametrize(
+    ("options", "shown"),
+    [
+        ({"merge_keys": ["id"]}, "no mode"),
+        ({"mode": "append", "merge_keys": ["id"]}, "mode 'append'"),
+    ],
+)
+def test_the_error_says_which_mode_was_given(options, shown):
+    with pytest.raises(ValidationError, match=f"only valid with mode 'merge' .*{shown}"):
+        DeltaTableSaveOptions(**options)
+
+
+def test_merge_options_are_accepted_with_mode_merge():
+    options = DeltaTableSaveOptions(
+        mode="merge",
+        merge_keys=["id"],
+        update_columns=["name"],
+    )
+    assert options.mode == WriteMode.MERGE
+
+
+def test_a_catalog_entry_with_merge_keys_and_no_mode_fails_when_loaded(tmp_path):
+    entry = {
+        "file_format": "delta_table",
+        "connection": {"conn_type": "fs", "extra": {"base_path": str(tmp_path)}},
+        "location": "t",
+        "save_options": {"merge_keys": ["id"]},
+    }
+    with pytest.raises(ValidationError, match="only valid with mode 'merge'"):
+        Catalog.from_dict({"entries": {"t": entry}})
+
+
+def test_merge_options_without_a_mode_never_write(local_conn):
+    # Construction already refuses them; this is the guard in case it is bypassed.
+    options = DeltaTableSaveOptions.model_construct(merge_keys=["id"])
+    ds = DeltaTableDataset(conn=local_conn, save_options=options)
     with pytest.raises(ValueError, match="only valid with mode 'merge'"):
         ds.save_arrow_table(PATH, pa.table({"id": [1]}))
+    assert not (Path(local_conn["extra"]["base_path"]) / PATH).exists()
 
 
 def test_merge_options_are_not_passed_to_write_deltalake(local_conn):
-    # `update_columns` alone is allowed (no mode) and must not reach delta-rs
+    # a mode other than merge writes normally: no merge option reaches delta-rs
     ds = _ds(local_conn, mode="append")
     ds.save_arrow_table(PATH, pa.table({"id": [1]}))
     assert _read(local_conn).height == 1

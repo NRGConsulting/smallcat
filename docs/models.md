@@ -78,6 +78,46 @@ Any other type (`dict`, nested models, unions of several types, `Decimal`...)
 is rejected with `ModelDefinitionError` when the class is defined, naming the
 field. Columns are matched by field name; aliases are not used.
 
+### Types a file format cannot hold
+
+Having a Polars type does not mean every file format can store it. `time` and
+`timedelta` are the two that cannot, in some formats or in all of them. This was
+checked by writing and reading each one in each format:
+
+| Field type | `parquet` | `delta_table` | `csv` | `excel` |
+|------------|:---------:|:-------------:|:-----:|:-------:|
+| `time` | yes | **no** | yes | **no** |
+| `timedelta` | **no** | **no** | **no** | **no** |
+| every other type in the table above | yes | yes | yes | yes |
+
+Why they fail:
+
+* **Parquet and `timedelta`.** DuckDB writes the duration as an `INTERVAL` and
+  Polars cannot read that back: the process aborts with a `PanicException`.
+* **Delta Lake** has no time-of-day type and no duration type.
+* **CSV and Excel** have no duration type, and Excel has no time-of-day type
+  either: the value comes back as a time or as text, not as what was written.
+
+A model that declares one of these combinations is refused **when the class is
+defined**, not when a job runs. The error names every field, says why and what
+to do instead:
+
+```text
+ModelDefinitionError: Job has fields its file format cannot hold:
+  - Job.took is a timedelta, which cannot be stored in delta_table: Delta Lake
+    has no duration type. Store it as a number (seconds as a `float`, or
+    microseconds as an `int`) and convert it in your code.
+```
+
+A list of those types (`list[time]`) is checked the same way, and so is an
+optional one (`timedelta | None`).
+
+!!! note "One exception: Parquet written by another tool"
+    A `timedelta` in a Parquet file written by pyarrow or Polars is read without
+    trouble. A **read-only** model (`allowed_write_modes = []`) may declare it
+    over such a file, and `all()` and `filter()` work. `where()` does not: DuckDB
+    gives the value back as a number.
+
 ## Registering
 
 ```python
@@ -139,6 +179,7 @@ Customer.objects.filter(pl.col("id") > 10).all()
 Customer.objects.select("id", "name").all()
 Customer.objects.filter(pl.col("id") > 10).select("name").lazy()   # pl.LazyFrame
 Customer.objects.where("id > 10 AND email IS NOT NULL").all()
+Customer.objects.where(id__gt=10, email__isnull=False).all()   # the same, as lookups
 Customer.objects.filter(pl.col("id") == 1).as_models()      # list[Customer]
 ```
 
@@ -148,8 +189,11 @@ Customer.objects.filter(pl.col("id") == 1).as_models()      # list[Customer]
 | `lazy()` | `pl.LazyFrame` | Chain more Polars after it. See below. |
 | `as_models()` | `list[Customer]` | Each row is validated by Pydantic, so field constraints apply. Cannot be combined with `select()`. |
 | `filter(*exprs)` | query | Polars expressions; several calls are combined with AND. |
-| `where(sql)` | query | An SQL predicate (DuckDB). Usable once: join conditions with `AND` in one string. |
+| `where(sql=None, **lookups)` | query | An SQL predicate (DuckDB) and/or Django-style lookups such as `id__gte=10`. Usable once per query. See [Querying models](querying-models.md). |
 | `select(*fields)` | query | Only some fields; names must be fields of the model. |
+
+Every way of filtering, with the operators and their restrictions, is in
+[Querying models](querying-models.md).
 
 ### `filter` or `where`, never both
 
@@ -231,7 +275,9 @@ Customer.objects.save(df, mode="merge", merge_keys=["email"])   # replaces them
   writing instead of letting Delta fail ambiguously. It does not deduplicate.
 * The columns of the data must already exist in the table: a merge does not
   change the schema.
-* `merge_keys` with a mode other than `merge` is an error, not ignored. A model
+* `merge_keys` with a mode other than `merge` is an error, not ignored. In a
+  catalog, `merge_keys` or `update_columns` without `mode: merge` is refused when
+  the catalog is loaded, not when it first saves. A model
   without keys can be registered; it fails when it is saved with `merge`
   without `merge_keys`.
 * `allowed_write_modes` includes `merge` by default; restrict it like the other

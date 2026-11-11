@@ -106,3 +106,14 @@
     options:
       heading_level: 3
       show_root_heading: true
+
+## Lookups
+
+::: smallcat.models.lookups
+    options:
+      heading_level: 3
+      show_root_heading: true
+      members:
+        - lookups_to_sql
+        - kind_of
+        - OPERATORS
