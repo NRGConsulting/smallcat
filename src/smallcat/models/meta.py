@@ -185,7 +185,8 @@ def _check_options(meta: ModelMeta) -> list[str]:
             "each save (`objects.save(df, mode=...)`) and limited by "
             "`allowed_write_modes`",
         )
-    if meta.merge_keys is not None and meta.file_format is not ModelFileFormat.DELTA_TABLE:
+    not_delta = meta.file_format is not ModelFileFormat.DELTA_TABLE
+    if meta.merge_keys is not None and not_delta:
         problems.append(
             "Meta.merge_keys is only valid for delta_table "
             f"(file_format is {meta.file_format.value!r})",
