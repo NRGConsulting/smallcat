@@ -508,7 +508,7 @@
     },
     "DeltaTableSaveOptions": {
       "additionalProperties": false,
-      "description": "Options controlling how a Delta table is written.\n\nAttributes:\n  mode: Write mode to apply if the table exists.\n  partition_by: Columns to partition by (Hive-style directory layout).\n  schema_mode: Strategy to reconcile schema differences during write.",
+      "description": "Options controlling how a Delta table is written.\n\nAttributes:\n  mode: Write mode to apply if the table exists.\n  partition_by: Columns to partition by (Hive-style directory layout).\n  schema_mode: Strategy to reconcile schema differences during write.\n  merge_keys: Columns that identify a row in ``merge`` mode (the ``ON`` of\n    the merge). Required with ``merge``, not allowed with other modes.\n  update_columns: Columns overwritten in the rows that match, in ``merge``\n    mode. By default every column of the data except the keys.",
       "properties": {
         "mode": {
           "anyOf": [
@@ -549,6 +549,38 @@
           ],
           "default": null,
           "description": "How to handle schema differences on write."
+        },
+        "merge_keys": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Columns that identify a row (required with mode 'merge').",
+          "title": "Merge Keys"
+        },
+        "update_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Columns updated on matching rows (mode 'merge' only).",
+          "title": "Update Columns"
         }
       },
       "title": "DeltaTableSaveOptions",
@@ -1216,14 +1248,15 @@
       "enum": [
         "append",
         "overwrite",
-        "ignore"
+        "ignore",
+        "merge"
       ],
       "title": "WriteMode",
       "type": "string"
     }
   },
   "additionalProperties": false,
-  "description": "A collection of named datasets with associated loader configuration.\n\nThe catalog maps user-defined keys to concrete dataset entries (e.g., CSV or\nExcel). It can be constructed from an in-memory dictionary, an Airflow\nVariable (JSON), or a YAML file.\n\nAttributes:\n    entries: Mapping of dataset names to their configurations.",
+  "description": "A collection of named datasets with associated loader configuration.\n\nThe catalog maps user-defined keys to concrete dataset entries (e.g., CSV or\nExcel). It can be constructed from an in-memory dictionary, an Airflow\nVariable (JSON), or a YAML file.\n\nConnections are named: an entry's `connection` is the name of a connection\nloaded in a :class:`~smallcat.connections_config.Connections`, which the\nloaders accept as `connections=`. The names are checked when the catalog is\nloaded. Without `connections=`, a name is resolved through Airflow on first\nuse, as before. Inline connections (a mapping instead of a name) are\ndeprecated because they put credentials in the catalog.\n\nAttributes:\n    entries: Mapping of dataset names to their configurations.",
   "properties": {
     "entries": {
       "additionalProperties": {
