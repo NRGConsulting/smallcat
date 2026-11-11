@@ -131,7 +131,7 @@ def test_meta_defaults():
     meta = Person.__smallcat_meta__
     assert meta.location == "people.parquet"
     assert meta.file_format == "parquet"
-    assert meta.allowed_write_modes == {APPEND, OVERWRITE}
+    assert meta.allowed_write_modes == {APPEND, OVERWRITE, ModelWriteMode.MERGE}
     assert meta.validation_mode is ModelValidationMode.STRICT
     assert meta.load_options is None
     assert meta.save_options is None

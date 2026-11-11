@@ -195,9 +195,49 @@ default**, because it decides what happens to the data that is already there:
 |------------------|--------|--------------|
 | `OVERWRITE` | **Replaces the whole dataset** with the data you pass. | `csv`, `excel` and `parquet` (a single file), and `delta_table` |
 | `APPEND` | **Adds** the rows to what exists. | `delta_table` only |
+| `MERGE` | **Inserts** the rows whose key is new and **updates** the ones whose key already exists. It never deletes. | `delta_table` only |
 
-There is no `upsert`: nothing in smallcat updates rows by key today. In
-particular, saving one object with `OVERWRITE` leaves a dataset of one row.
+Saving one object with `OVERWRITE` leaves a dataset of one row; use `MERGE` to
+upsert it by key.
+
+### Merging by key
+
+`MERGE` needs to know which fields identify a row. Declare them in `Meta`, or
+pass them in the call (the call wins):
+
+```python
+class Customer(Model):
+    id: int
+    name: str
+    email: str | None
+
+    class Meta:
+        location = "silver/customers"
+        file_format = ModelFileFormat.DELTA_TABLE
+        merge_keys = ["id"]                    # optional
+
+Customer.objects.save(df, mode="merge")                         # uses Meta.merge_keys
+Customer.objects.save(df, mode="merge", merge_keys=["email"])   # replaces them
+```
+
+* The keys are never updated. Matching rows get every other column of the data,
+  or only the ones in `save_options.update_columns` (set it in
+  `Meta.save_options`). New rows are inserted whole.
+* If the table does not exist, the first merge creates it.
+* The keys must be fields of the model, without repeats, and `Meta.merge_keys`
+  must not be nullable (`X | None`): a key has to identify a row. This is
+  checked when the model is registered.
+* The data must not have null or repeated keys: smallcat refuses it before
+  writing instead of letting Delta fail ambiguously. It does not deduplicate.
+* The columns of the data must already exist in the table: a merge does not
+  change the schema.
+* `merge_keys` with a mode other than `merge` is an error, not ignored. A model
+  without keys can be registered; it fails when it is saved with `merge`
+  without `merge_keys`.
+* `allowed_write_modes` includes `merge` by default; restrict it like the other
+  modes.
+* Rows are not deleted by a merge (deleting by predicate is a separate issue,
+  [#32](https://github.com/NRGConsulting/smallcat/issues/32)).
 
 A mode that is not a `ModelWriteMode` raises `ValueError` listing the valid
 ones. These cases are refused *before anything is written*:
@@ -205,7 +245,10 @@ ones. These cases are refused *before anything is written*:
 | Error | Cause |
 |-------|-------|
 | `ModelWriteNotAllowedError` | The mode is not in `allowed_write_modes`, or the model is read-only. |
-| `ModelUnsupportedWriteModeError` | The format cannot do it: `APPEND` on a file, or `OVERWRITE` on partitioned Parquet. |
+| `ModelUnsupportedWriteModeError` | The format cannot do it: `APPEND` or `MERGE` on a file, or `OVERWRITE` on partitioned Parquet. |
+| `ModelQueryError` | `MERGE` without keys, `merge_keys` with another mode, or a key that is not a field of the model. |
+| `ValueError` | The data has null or repeated merge keys, or columns the Delta table does not have. |
+| `ModelRegistrationError` | (when registering) `Meta.merge_keys` or `update_columns` name fields that do not exist, or the keys are empty, repeated or nullable. |
 | `ModelSchemaValidationError` | The data does not match the model. See [Validation](#validation). |
 
 !!! warning "Partitioned Parquet cannot be overwritten"

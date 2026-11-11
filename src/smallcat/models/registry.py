@@ -15,7 +15,7 @@ its own connections, and lets it take permissions away.
 do to run against a registry of their own.
 """
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -28,6 +28,7 @@ from smallcat.models.meta import ModelMeta, build_entry
 
 if TYPE_CHECKING:
     from smallcat.models.model import Model
+    from smallcat.models.schema import ModelSchema
 
 
 @dataclass(frozen=True)
@@ -101,8 +102,9 @@ class ModelRegistry:
 
         Raises:
             ModelRegistrationError: If the model has no `Meta`, is already
-                registered, or `allowed_write_modes` asks for a mode the model
-                does not allow.
+                registered, `allowed_write_modes` asks for a mode the model
+                does not allow, or its `Meta.merge_keys` / `update_columns` are
+                not valid fields of the model (a key must also be required).
             ConnectionNotLoadedError: If the connection is not loaded.
         """
         meta: ModelMeta | None = getattr(model, "__smallcat_meta__", None)
@@ -110,6 +112,7 @@ class ModelRegistry:
             msg = f"{model.__name__} has no Meta: it cannot be registered"
             raise ModelRegistrationError(msg)
         self._connections.require(connection)
+        _check_merge_fields(model, meta)
         if model in self._registrations and not replace:
             msg = (
                 f"{model.__name__} is already registered "
@@ -158,6 +161,7 @@ class ModelRegistry:
         self,
         model: "type[Model]",
         write_mode: ModelWriteMode | None = None,
+        merge_keys: Sequence[str] | None = None,
     ) -> Any:  # noqa: ANN401
         """Build the catalog entry that reads or writes a registered model.
 
@@ -165,6 +169,8 @@ class ModelRegistry:
             model: The model class.
             write_mode: The mode of the write about to happen. Delta tables take
                 it as their `mode`; other formats need nothing.
+            merge_keys: The keys of a `merge` write. They replace
+                `Meta.merge_keys`; with none given, those are used.
 
         Returns:
             A catalog entry bound to this registry's connections.
@@ -174,6 +180,11 @@ class ModelRegistry:
         save_options = None
         if write_mode is not None and meta.file_format is ModelFileFormat.DELTA_TABLE:
             save_options = {**(meta.save_options or {}), "mode": write_mode.value}
+            if write_mode is ModelWriteMode.MERGE:
+                keys = merge_keys if merge_keys is not None else meta.merge_keys
+                save_options["merge_keys"] = list(keys or [])
+            else:
+                save_options.pop("update_columns", None)
         entry = build_entry(meta, registration.connection, save_options)
         entry.bind_connections(self._connections)
         return entry
@@ -189,6 +200,51 @@ class ModelRegistry:
     def __len__(self) -> int:
         """Return the number of registered models."""
         return len(self._registrations)
+
+
+def _check_merge_fields(model: "type[Model]", meta: ModelMeta) -> None:
+    """Check `Meta.merge_keys` and `save_options.update_columns` against the fields.
+
+    Raises:
+        ModelRegistrationError: Naming what is wrong and the fields available.
+    """
+    spec: ModelSchema = model.__smallcat_schema__  # type: ignore[assignment]
+    available = list(spec.fields)
+    problems = []
+    keys = list(meta.merge_keys) if meta.merge_keys is not None else None
+    if keys is not None:
+        if not keys:
+            problems.append("Meta.merge_keys is empty")
+        if len(set(keys)) != len(keys):
+            problems.append("Meta.merge_keys has repeated fields")
+        missing = [k for k in keys if k not in spec.fields]
+        if missing:
+            problems.append(
+                f"Meta.merge_keys {missing} are not fields of the model "
+                f"(fields: {available})",
+            )
+        nullable = [k for k in keys if k in spec.fields and spec.fields[k].nullable]
+        if nullable:
+            problems.append(
+                f"Meta.merge_keys {nullable} are nullable: a key must identify a row",
+            )
+    update = (meta.save_options or {}).get("update_columns") or []
+    unknown = [c for c in update if c not in spec.fields]
+    if unknown:
+        problems.append(
+            f"Meta.save_options.update_columns {unknown} are not fields of the "
+            f"model (fields: {available})",
+        )
+    overlap = sorted(set(update) & set(keys or []))
+    if overlap:
+        problems.append(
+            f"Meta.save_options.update_columns {overlap} are merge keys: "
+            "keys are never updated",
+        )
+    if problems:
+        details = "\n  - ".join(problems)
+        msg = f"{model.__name__} cannot be registered:\n  - {details}"
+        raise ModelRegistrationError(msg)
 
 
 default_registry = ModelRegistry()

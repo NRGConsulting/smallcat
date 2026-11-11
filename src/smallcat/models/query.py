@@ -12,6 +12,7 @@ There are two ways to filter and they cannot be combined in one query:
 (DuckDB). `select()` combines with either.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Self
 
@@ -266,6 +267,45 @@ def _to_frame(model: "type[Model]", data: object) -> pl.DataFrame:
     return pl.DataFrame([i.model_dump() for i in items], schema=spec.polars_schema())
 
 
+def _merge_keys_for(
+    model: "type[Model]",
+    meta: ModelMeta,
+    spec: ModelSchema,
+    mode: ModelWriteMode,
+    call_keys: Sequence[str] | None,
+) -> tuple[str, ...] | None:
+    """Resolve the keys of a write: those of the call, else those of `Meta`."""
+    if mode is not ModelWriteMode.MERGE:
+        if call_keys is not None:
+            msg = (
+                f"merge_keys only applies to mode='merge', not '{mode.value}': "
+                "it would be ignored"
+            )
+            raise ModelQueryError(msg)
+        return None
+    if isinstance(call_keys, str):
+        msg = "merge_keys must be a list of field names, not a string"
+        raise ModelQueryError(msg)
+    keys = tuple(call_keys) if call_keys is not None else meta.merge_keys
+    if not keys:
+        msg = (
+            f"{model.__name__} has no merge keys: pass "
+            "save(..., mode='merge', merge_keys=[...]) or set Meta.merge_keys"
+        )
+        raise ModelQueryError(msg)
+    if len(set(keys)) != len(keys):
+        msg = f"merge_keys has repeated fields: {list(keys)}"
+        raise ModelQueryError(msg)
+    unknown = [k for k in keys if k not in spec.fields]
+    if unknown:
+        msg = (
+            f"merge_keys {unknown} are not fields of {model.__name__} "
+            f"(fields: {list(spec.fields)})"
+        )
+        raise ModelQueryError(msg)
+    return keys
+
+
 class ModelManager[M: "Model"]:
     """The entry point to a model's data: `Model.objects`."""
 
@@ -305,6 +345,7 @@ class ModelManager[M: "Model"]:
         data: "pl.DataFrame | M | Iterable[M]",
         *,
         mode: ModelWriteMode | str,
+        merge_keys: Sequence[str] | None = None,
     ) -> None:
         """Validate data against the model and write it.
 
@@ -313,15 +354,21 @@ class ModelManager[M: "Model"]:
 
         * ``overwrite`` replaces the dataset entirely.
         * ``append`` adds the rows (only Delta tables can).
-
-        There is no upsert.
+        * ``merge`` inserts the rows with a new key and updates the ones whose
+          key exists, by ``merge_keys`` (only Delta tables can). It never
+          deletes rows. The keys of the call replace those of ``Meta``.
 
         Args:
             data: A DataFrame, an instance of the model or a list of them.
             mode: A :class:`ModelWriteMode` or its value.
+            merge_keys: Fields that identify a row, with ``mode="merge"``.
+                By default ``Meta.merge_keys``.
 
         Raises:
             ValueError: If `mode` is not a :class:`ModelWriteMode`.
+            ModelQueryError: If `merge_keys` is given with a mode other than
+                ``merge``, if ``merge`` has no keys (neither in the call nor in
+                ``Meta``) or a key is not a field of the model.
             ModelWriteNotAllowedError: If the model (or its registration) does
                 not allow this mode; read-only models allow none.
             ModelUnsupportedWriteModeError: If the file format cannot write
@@ -353,8 +400,9 @@ class ModelManager[M: "Model"]:
             )
             raise ModelUnsupportedWriteModeError(msg)
 
+        keys = _merge_keys_for(model, meta, spec, write_mode, merge_keys)
         frame = validate_frame(_to_frame(model, data), spec, meta.validation_mode)
-        registry.entry_for(model, write_mode).save_polars(frame)
+        registry.entry_for(model, write_mode, keys).save_polars(frame)
 
 
 class ManagerDescriptor:
