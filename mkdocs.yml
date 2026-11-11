@@ -67,6 +67,7 @@ nav:
     - Models: models.md
     - Querying models: querying-models.md
     - Querying a catalog: querying-catalog.md
+    - Writing data: writing-data.md
     # - Changelog: changelog.md
   - Examples:
     - Standalone: examples/standalone.md

@@ -10,6 +10,7 @@ EXAMPLE = EXAMPLES / "models_local.py"
 QUERY_EXAMPLE = EXAMPLES / "models_query.py"
 QUERYING_MODELS = EXAMPLES / "querying_models.py"
 QUERYING_CATALOG = EXAMPLES / "querying_catalog.py"
+WRITING = EXAMPLES / "writing_data.py"
 
 
 def test_the_models_example_runs_and_the_guard_rails_refuse():
@@ -24,7 +25,7 @@ def test_the_models_example_runs_and_the_guard_rails_refuse():
     )
     assert result.returncode == 0, result.stderr
     out = result.stdout
-    assert "SELECTION: col(\"id\") > 1" in out  # the filter reached the scan
+    assert 'SELECTION: col("id") > 1' in out  # the filter reached the scan
     assert "-- events (appended twice, then merged)" in out
     assert "│ 2   ┆ logout   │" in out  # merge updated id 2
     assert "│ 3   ┆ purchase │" in out  # and inserted id 3
@@ -114,3 +115,34 @@ def test_the_querying_catalog_page_prints_what_it_documents():
     assert "1040.0" in out
     assert out.count("ValueError: Unsafe or invalid WHERE clause") == 3
     assert "KeyError:" in out
+
+
+def test_the_writing_page_prints_what_it_documents():
+    out = _run(WRITING)
+    assert "people_csv      [(2, 'linus', 'Helsinki')]" in out
+    assert (
+        "append          [(1, 'ada', 'Madrid'), (2, 'linus', 'Oslo'), (3, 'grace', 'Boston')]"
+        in out
+    )
+    assert (
+        "ignore          [(1, 'ada', 'Madrid'), (2, 'linus', 'Oslo'), (3, 'grace', 'Boston')]"
+        in out
+    )
+    assert (
+        "(2, 'linus', 'Helsinki'), (3, 'grace', 'Boston'), (4, 'alan', 'London')]"
+        in out
+    )
+    assert "(1, 'ada', 'Seville')" in out  # update_columns kept the name
+    assert "rows updated    1" in out
+    assert "(9, 'grace', 'Austin')" in out  # merged by name
+    assert "overwrite       [(2, 'linus', 'Oslo')]" in out
+    for line in (
+        "no mode         TypeError",
+        "append a file   ModelUnsupportedWriteModeError",
+        "merge a file    ModelUnsupportedWriteModeError",
+        "keys, no merge  ModelQueryError",
+        "key not a field ModelQueryError",
+        "wrong columns   ModelSchemaValidationError",
+        "does not allow 'overwrite' (allowed: ['merge'])",
+    ):
+        assert line in out
