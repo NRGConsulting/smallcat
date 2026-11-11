@@ -159,7 +159,7 @@ Order.objects.where(placed_at__lt=datetime(2025, 2, 1, 12, 0)) # [1, 2]
 
 | Field type | Operators |
 |------------|-----------|
-| `int`, `float`, `date`, `datetime`, `time`, `timedelta` | `exact`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`, `range`, `isnull` |
+| `int`, `float`, `date`, `datetime`, `time`, `timedelta` (see the restrictions) | `exact`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`, `range`, `isnull` |
 | `str`, and `Literal` of strings | `exact`, `ne`, `in`, `contains`, `startswith`, `endswith`, `isnull` |
 | `bool` | `exact`, `ne`, `isnull` |
 | `list[...]`, `bytes` | `isnull` only |
@@ -194,9 +194,10 @@ ModelQueryError: where(): 'gt' is not available for 'customer', a str field
   value mean themselves, not wildcards, and they are case sensitive.
 * **A field called `sql`.** `sql=` is always the SQL text. Reach a field with
   that name as `sql__exact=...`.
-* **A `timedelta` field in Parquet** cannot be read back through smallcat today
-  (DuckDB writes an `INTERVAL` that Polars cannot read). The `timedelta`
-  lookups exist for other sources, but avoid that field in Parquet models.
+* **`timedelta` fields.** No file format can hold one written by smallcat (see
+  [Types a file format cannot hold](models.md#types-a-file-format-cannot-hold)),
+  so models rarely have one. The lookups exist for the read-only Parquet case,
+  but there `where()` cannot read the column back: use `filter()` instead.
 
 ### Values are data
 

@@ -342,18 +342,18 @@ def test_an_unsafe_sql_is_still_refused_when_the_query_runs():
 
 
 def test_a_duration_literal_is_a_duckdb_interval():
-    # Parquet cannot round-trip a timedelta through smallcat (DuckDB writes an
-    # INTERVAL that Polars cannot read), so the literal is checked on its own.
+    # No format can hold a timedelta written by smallcat (see models/formats.py), so
+    # there is no model to query: render the literal from a schema built by hand.
     import duckdb
 
-    class Run(Model):
-        took: dt.timedelta
+    from smallcat.models.schema import FieldSpec, ModelSchema
 
-        class Meta:
-            location = "runs.parquet"
-            file_format = "parquet"
-
-    sql = lookups_to_sql(Run.__smallcat_schema__, {"took__gte": dt.timedelta(hours=1)})
+    schema = ModelSchema(
+        "Run",
+        {"took": FieldSpec("took", pl.Duration("us"), nullable=False)},
+        "forbid",
+    )
+    sql = lookups_to_sql(schema, {"took__gte": dt.timedelta(hours=1)})
     assert sql == '"took" >= to_microseconds(3600000000)'
     literal = sql.split(">= ")[1]
     assert duckdb.sql(f"SELECT {literal} = INTERVAL 1 HOUR").fetchall() == [(True,)]

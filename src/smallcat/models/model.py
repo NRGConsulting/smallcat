@@ -27,6 +27,7 @@ from typing import Any, ClassVar
 from pydantic import BaseModel
 
 from smallcat.models.errors import ModelDefinitionError
+from smallcat.models.formats import unsupported_fields
 from smallcat.models.meta import ModelMeta, parse_meta
 from smallcat.models.query import ManagerDescriptor
 from smallcat.models.schema import (
@@ -82,5 +83,19 @@ class Model(BaseModel):
         meta_class = getattr(cls, "Meta", None)
         if meta_class is None:
             return
-        cls.__smallcat_meta__ = parse_meta(cls.__name__, meta_class)
-        cls.__smallcat_schema__ = _build_schema(cls)
+        meta = parse_meta(cls.__name__, meta_class)
+        schema = _build_schema(cls)
+        problems = unsupported_fields(
+            schema,
+            meta.file_format,
+            writable=bool(meta.allowed_write_modes),
+        )
+        if problems:
+            details = "\n  - ".join(problems)
+            msg = (
+                f"{cls.__name__} has fields its file format cannot hold:"
+                f"\n  - {details}"
+            )
+            raise ModelDefinitionError(msg)
+        cls.__smallcat_meta__ = meta
+        cls.__smallcat_schema__ = schema

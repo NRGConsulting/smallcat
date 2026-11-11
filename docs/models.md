@@ -78,6 +78,46 @@ Any other type (`dict`, nested models, unions of several types, `Decimal`...)
 is rejected with `ModelDefinitionError` when the class is defined, naming the
 field. Columns are matched by field name; aliases are not used.
 
+### Types a file format cannot hold
+
+Having a Polars type does not mean every file format can store it. `time` and
+`timedelta` are the two that cannot, in some formats or in all of them. This was
+checked by writing and reading each one in each format:
+
+| Field type | `parquet` | `delta_table` | `csv` | `excel` |
+|------------|:---------:|:-------------:|:-----:|:-------:|
+| `time` | yes | **no** | yes | **no** |
+| `timedelta` | **no** | **no** | **no** | **no** |
+| every other type in the table above | yes | yes | yes | yes |
+
+Why they fail:
+
+* **Parquet and `timedelta`.** DuckDB writes the duration as an `INTERVAL` and
+  Polars cannot read that back: the process aborts with a `PanicException`.
+* **Delta Lake** has no time-of-day type and no duration type.
+* **CSV and Excel** have no duration type, and Excel has no time-of-day type
+  either: the value comes back as a time or as text, not as what was written.
+
+A model that declares one of these combinations is refused **when the class is
+defined**, not when a job runs. The error names every field, says why and what
+to do instead:
+
+```text
+ModelDefinitionError: Job has fields its file format cannot hold:
+  - Job.took is a timedelta, which cannot be stored in delta_table: Delta Lake
+    has no duration type. Store it as a number (seconds as a `float`, or
+    microseconds as an `int`) and convert it in your code.
+```
+
+A list of those types (`list[time]`) is checked the same way, and so is an
+optional one (`timedelta | None`).
+
+!!! note "One exception: Parquet written by another tool"
+    A `timedelta` in a Parquet file written by pyarrow or Polars is read without
+    trouble. A **read-only** model (`allowed_write_modes = []`) may declare it
+    over such a file, and `all()` and `filter()` work. `where()` does not: DuckDB
+    gives the value back as a number.
+
 ## Registering
 
 ```python
