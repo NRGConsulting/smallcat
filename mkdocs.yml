@@ -2,6 +2,9 @@ site_name: smallcat-chonk
 site_description: A small, modular data catalog.
 site_url: https://nrgconsulting.github.io/smallcat/
 strict: true
+# Planning notes for implementers: kept in the repo, not published on the site.
+exclude_docs: |
+  plans/
 repo_name: NRGConsulting/smallcat
 repo_url: https://github.com/NRGConsulting/smallcat
 theme:
