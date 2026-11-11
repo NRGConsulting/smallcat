@@ -131,8 +131,12 @@ class DeltaTableSaveOptions(BaseModel):
             if self.schema_mode is not None:
                 msg = "schema_mode is not supported with mode 'merge'"
                 raise ValueError(msg)
-        elif self.mode is not None and (self.merge_keys or self.update_columns):
-            msg = "merge_keys and update_columns are only valid with mode 'merge'"
+        elif self.merge_keys is not None or self.update_columns is not None:
+            shown = "no mode" if self.mode is None else f"mode '{self.mode.value}'"
+            msg = (
+                "merge_keys and update_columns are only valid with mode 'merge' "
+                f"(got {shown})"
+            )
             raise ValueError(msg)
         if self.merge_keys is not None and len(set(self.merge_keys)) != len(
             self.merge_keys,

@@ -257,3 +257,42 @@ def test_meta_merge_keys_on_a_non_delta_format_is_a_definition_error():
 def test_meta_save_options_cannot_carry_merge_keys():
     with pytest.raises(ModelDefinitionError, match="use Meta.merge_keys"):
         _define(save_options={"merge_keys": ["id"]})
+
+
+# ---------- update_columns in Meta, now that it needs mode "merge" ----------
+
+
+def test_update_columns_in_meta_stay_out_of_reads_and_other_writes(registry):
+    class Partial2(Model):
+        id: int
+        name: str
+
+        class Meta:
+            location = "partial2"
+            file_format = "delta_table"
+            merge_keys = ["id"]
+            save_options = {"update_columns": ["name"]}
+
+    registry.register(Partial2, connection="local")
+    assert registry.entry_for(Partial2).save_options.update_columns is None
+    for mode in (ModelWriteMode.APPEND, ModelWriteMode.OVERWRITE):
+        options = registry.entry_for(Partial2, mode).save_options
+        assert options.update_columns is None
+        assert options.mode.value == mode.value
+    merge = registry.entry_for(Partial2, ModelWriteMode.MERGE).save_options
+    assert merge.update_columns == ["name"]
+    assert merge.merge_keys == ["id"]
+
+
+def test_update_columns_that_overlap_the_keys_fail_when_the_model_is_defined():
+    with pytest.raises(ModelDefinitionError, match="must not include merge keys"):
+        _define(merge_keys=["id"], save_options={"update_columns": ["id"]})
+
+
+def test_update_columns_in_meta_of_a_file_format_that_cannot_merge_are_refused():
+    with pytest.raises(ModelDefinitionError, match="update_columns"):
+        _define(
+            file_format="parquet",
+            location="x.parquet",
+            save_options={"update_columns": ["id"]},
+        )

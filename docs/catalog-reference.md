@@ -69,7 +69,8 @@ entries:
       update_columns: [name, email]   # optional; default: every column but the keys
 ```
 
-* `merge_keys` is required with `merge` and not allowed with other modes. The
+* `merge_keys` is required with `merge` and not allowed otherwise: with any other
+  mode, or with no `mode` at all, the catalog is refused when it is loaded. The
   keys are never updated.
 * `update_columns` (optional) limits which columns are overwritten on matching
   rows; new rows are always inserted whole. It cannot include a key.

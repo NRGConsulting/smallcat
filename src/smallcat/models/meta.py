@@ -195,10 +195,25 @@ def _check_options(meta: ModelMeta) -> list[str]:
         problems.append(
             "Meta.save_options.merge_keys is not allowed: use Meta.merge_keys",
         )
-    try:
-        _ENTRY_ADAPTER.validate_python(entry_dict(meta, "meta-check"))
-    except ValidationError as e:
-        problems.extend(_describe("Meta", e))
+    options = dict(meta.save_options or {})
+    # `update_columns` is only valid with mode `merge`, which a model chooses on
+    # each save, so it is checked as it would be used: with `merge` and some keys.
+    update_columns = options.pop("update_columns", None)
+    checks = [options if meta.save_options is not None else None]
+    if update_columns is not None and meta.file_format is ModelFileFormat.DELTA_TABLE:
+        keys = list(meta.merge_keys or ["<key>"])
+        checks.append(
+            {"mode": "merge", "merge_keys": keys, "update_columns": update_columns},
+        )
+    elif update_columns is not None:
+        checks.append({"update_columns": update_columns})  # the format will say no
+    for save_options in checks:
+        try:
+            _ENTRY_ADAPTER.validate_python(
+                entry_dict(meta, "meta-check", save_options),
+            )
+        except ValidationError as e:
+            problems.extend(_describe("Meta", e))
     return problems
 
 

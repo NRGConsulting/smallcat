@@ -235,7 +235,9 @@ Customer.objects.save(df, mode="merge", merge_keys=["email"])   # replaces them
   writing instead of letting Delta fail ambiguously. It does not deduplicate.
 * The columns of the data must already exist in the table: a merge does not
   change the schema.
-* `merge_keys` with a mode other than `merge` is an error, not ignored. A model
+* `merge_keys` with a mode other than `merge` is an error, not ignored. In a
+  catalog, `merge_keys` or `update_columns` without `mode: merge` is refused when
+  the catalog is loaded, not when it first saves. A model
   without keys can be registered; it fails when it is saved with `merge`
   without `merge_keys`.
 * `allowed_write_modes` includes `merge` by default; restrict it like the other

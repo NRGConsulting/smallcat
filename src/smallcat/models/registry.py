@@ -178,13 +178,18 @@ class ModelRegistry:
         registration = self.get(model)
         meta: ModelMeta = model.__smallcat_meta__  # type: ignore[assignment]
         save_options = None
-        if write_mode is not None and meta.file_format is ModelFileFormat.DELTA_TABLE:
-            save_options = {**(meta.save_options or {}), "mode": write_mode.value}
+        if meta.file_format is ModelFileFormat.DELTA_TABLE:
+            # `update_columns` only means something with mode `merge`, so it
+            # stays out of reads and of every other write.
+            save_options = dict(meta.save_options or {})
             if write_mode is ModelWriteMode.MERGE:
                 keys = merge_keys if merge_keys is not None else meta.merge_keys
+                save_options["mode"] = write_mode.value
                 save_options["merge_keys"] = list(keys or [])
             else:
                 save_options.pop("update_columns", None)
+                if write_mode is not None:
+                    save_options["mode"] = write_mode.value
         entry = build_entry(meta, registration.connection, save_options)
         entry.bind_connections(self._connections)
         return entry
