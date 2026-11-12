@@ -167,62 +167,17 @@ with use_registry(test_registry):
 
 ## Reading
 
-Every way of filtering, with what is refused, is in
-[Querying models](querying-models.md).
-
-`Customer.objects` offers `all()`, `lazy()`, `as_models()`, `filter()`,
-`where()` and `select()`. The last three return a **query**: it is immutable
-(each call returns a new one) and reads nothing until you run it.
+`Model.objects` reads the dataset as a Polars `DataFrame` or `LazyFrame`, or as
+a list of validated model instances, and `filter()`, `where()` and `select()`
+choose the rows and fields:
 
 ```python
-Customer.objects.all()                                      # pl.DataFrame
+Customer.objects.all()                              # pl.DataFrame
 Customer.objects.filter(pl.col("id") > 10).all()
-Customer.objects.select("id", "name").all()
-Customer.objects.filter(pl.col("id") > 10).select("name").lazy()   # pl.LazyFrame
-Customer.objects.where("id > 10 AND email IS NOT NULL").all()
-Customer.objects.where(id__gt=10, email__isnull=False).all()   # the same, as lookups
-Customer.objects.filter(pl.col("id") == 1).as_models()      # list[Customer]
 ```
 
-| Method | Returns | Notes |
-|--------|---------|-------|
-| `all()` | `pl.DataFrame` | Columns in the model's order. |
-| `lazy()` | `pl.LazyFrame` | Chain more Polars after it. See below. |
-| `as_models()` | `list[Customer]` | Each row is validated by Pydantic, so field constraints apply. Cannot be combined with `select()`. |
-| `filter(*exprs)` | query | Polars expressions; several calls are combined with AND. |
-| `where(sql=None, **lookups)` | query | An SQL predicate (DuckDB) and/or Django-style lookups such as `id__gte=10`. Usable once per query. See [Querying models](querying-models.md). |
-| `select(*fields)` | query | Only some fields; names must be fields of the model. |
-
-Every way of filtering, with the operators and their restrictions, is in
-[Querying models](querying-models.md).
-
-### `filter` or `where`, never both
-
-`filter()` takes Polars expressions and `where()` takes SQL. They run on
-different engines, so a query can use **only one of them**; combining them, in
-either order, raises `ModelQueryError` where you write it, not when it runs.
-`select()` combines with either.
-
-### Lazy reads
-
-For Parquet and Delta, `lazy()` scans natively and what you chain after it is
-pushed down to the storage: only the needed columns and row groups are read.
-
-```text
->>> print(Customer.objects.filter(pl.col("id") > 1).select("name").lazy().explain())
-simple π 1/1 ["name"]
-  Parquet SCAN [file:///.../silver/customers.parquet]
-  PROJECT 2/4 COLUMNS
-  SELECTION: col("id") > 1
-```
-
-CSV and Excel are read in full and then wrapped. A query with `where()` runs its
-SQL immediately.
-
-`lazy()` checks the columns and types, but two checks need data and are **not**
-made on a frame you collect yourself: nulls in required fields (use `all()`),
-and, in `COERCE` mode, values that cannot be cast, which fail with a Polars
-error when collected.
+The methods, every way of filtering, the operators, lazy reads and what is
+refused are in [Querying models](querying-models.md).
 
 ## Writing
 

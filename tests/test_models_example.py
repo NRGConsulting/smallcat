@@ -7,6 +7,7 @@ from pathlib import Path
 
 EXAMPLES = Path(__file__).parent.parent / "docs" / "examples"
 EXAMPLE = EXAMPLES / "models_local.py"
+MODELS_QUERYING = EXAMPLES / "models_querying.py"
 QUERYING_MODELS = EXAMPLES / "querying_models.py"
 QUERYING_CATALOG = EXAMPLES / "querying_catalog.py"
 CONNECTIONS_CSV = EXAMPLES / "connections_csv.py"
@@ -29,16 +30,24 @@ def test_the_models_example_runs_and_the_guard_rails_refuse():
     )
     assert result.returncode == 0, result.stderr
     out = result.stdout
-    assert 'SELECTION: col("id") > 1' in out  # the filter reached the scan
     assert "-- events (appended twice, then merged)" in out
     assert "│ 2   ┆ logout   │" in out  # merge updated id 2
     assert "│ 3   ┆ purchase │" in out  # and inserted id 3
     assert "[wrong types] ModelSchemaValidationError" in out
     assert "[append, which the model does not allow] ModelWriteNotAllowedError" in out
     assert "[write a read-only model] ModelWriteNotAllowedError" in out
-    assert "[filter + where] ModelQueryError" in out
     assert "inside use_registry the data is separate: 0 rows" in out
     assert "outside it is untouched: 3 rows" in out
+
+
+def test_the_models_querying_example_filters_as_documented():
+    out = _run(MODELS_QUERYING)
+    assert 'SELECTION: col("id") > 1' in out  # the filter reached the scan
+    assert "PROJECT 2/4 COLUMNS" in out
+    assert "Customer(id=1, name='Ada'" in out  # as_models
+    assert "rows : 2" in out
+    assert "again: 1 (recent is unchanged)" in out  # the first query was not modified
+    assert "[filter + where] ModelQueryError" in out
 
 
 def _run(script: Path) -> str:

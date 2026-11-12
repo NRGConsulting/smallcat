@@ -86,6 +86,7 @@ nav:
     - ORM:
       - Connections: examples/orm/connections.md
       - Models: examples/orm/models.md
+      - Querying: examples/orm/querying.md
   - API reference:
     - Datasets: api/datasets.md
     - Connections: api/connections.md

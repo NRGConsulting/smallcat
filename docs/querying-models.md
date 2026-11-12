@@ -1,7 +1,8 @@
 # Querying models (ORM)
 
-A model reads its data through `Model.objects`. This page covers the three ways
-of choosing which rows to read, and when to use each one:
+A model reads its data through `Model.objects`. This page covers the methods that
+read it (`all`, `lazy`, `as_models`) and the three ways of choosing which rows to
+read, and when to use each one:
 
 | You write | Language | Runs on | Good for |
 |-----------|----------|---------|----------|
@@ -56,6 +57,17 @@ query.select("id", "customer").all()   # only some fields
     They run on different engines, so one query uses **only one of them**.
     Combining them, in either order, raises `ModelQueryError` where you write
     it. `select()` goes with either.
+
+## The methods
+
+| Method | Returns | Notes |
+|--------|---------|-------|
+| `all()` | `pl.DataFrame` | Columns in the model's order. |
+| `lazy()` | `pl.LazyFrame` | Chain more Polars after it. See [Lazy reads](#lazy-reads). |
+| `as_models()` | `list[Order]` | Each row is validated by Pydantic, so field constraints apply. Cannot be combined with `select()`. |
+| `filter(*exprs)` | query | Polars expressions; several calls are combined with AND. |
+| `where(sql=None, **lookups)` | query | An SQL predicate (DuckDB) and/or Django-style lookups such as `id__gte=10`. Usable once per query. |
+| `select(*fields)` | query | Only some fields; names must be fields of the model. |
 
 ## `filter`: Polars expressions
 
@@ -238,6 +250,18 @@ Choose with this in mind:
 * **Polars** when you want the lazy read with pushdown on Parquet and Delta, or
   a function only Polars has. A query with `where()` runs its SQL straight away
   and wraps the result.
+
+## Lazy reads
+
+For Parquet and Delta, `lazy()` scans natively and what you chain after it is
+pushed down to the storage: only the needed columns and row groups are read (see
+the plan under [`filter`](#filter-polars-expressions)). CSV and Excel are read in
+full and then wrapped. A query with `where()` runs its SQL immediately.
+
+`lazy()` checks the columns and types, but two checks need data and are **not**
+made on a frame you collect yourself: nulls in required fields (use `all()`),
+and, in `COERCE` mode, values that cannot be cast, which fail with a Polars
+error when collected.
 
 ## What fails, and where
 

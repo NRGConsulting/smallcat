@@ -1,5 +1,5 @@
 # ruff: noqa: CPY001, D101, D106, DTZ001, INP001, RUF012, T201
-"""Models end to end on the local filesystem.
+"""Defining, registering and writing models on the local filesystem.
 
 Run it with ``python docs/examples/models_local.py``. It needs nothing but
 smallcat-chonk: it writes its connections file and its data under a temporary
@@ -112,26 +112,9 @@ Event.objects.save(
     mode=ModelWriteMode.MERGE,
 )
 
-# 5. Read. -----------------------------------------------------------------------
+# 5. Read it back. Filtering and the other ways to read are in "Querying". -------
 print("-- all customers")
 print(Customer.objects.all().sort("id"))
-
-print("-- filter with Polars expressions, project two fields")
-print(
-    Customer.objects.filter(pl.col("created_at") >= datetime(2024, 3, 1))
-    .select("id", "name")
-    .all()
-    .sort("id"),
-)
-
-print("-- the same, lazily: the filter is pushed down into the Parquet scan")
-print(Customer.objects.filter(pl.col("id") > 1).select("name").lazy().explain())
-
-print("-- or with SQL")
-print(Customer.objects.where("email IS NOT NULL").select("name").all().sort("name"))
-
-print("-- as model instances")
-print(Customer.objects.filter(pl.col("id") == 1).as_models())
 
 print("-- events (appended twice, then merged)")
 print(Event.objects.all().sort("id"))
@@ -158,7 +141,6 @@ for label, action in {
         pl.DataFrame({"id": [1], "total": [1.0]}),
         mode=ModelWriteMode.OVERWRITE,
     ),
-    "filter + where": lambda: Customer.objects.filter(pl.col("id") > 1).where("id < 3"),
 }.items():
     try:
         action()
@@ -166,7 +148,6 @@ for label, action in {
         ModelSchemaValidationError,
         ModelUnsupportedWriteModeError,
         ModelWriteNotAllowedError,
-        ValueError,
     ) as error:
         print(f"[{label}] {type(error).__name__}: {error}")
 

@@ -1,9 +1,10 @@
 # Models on the local filesystem
 
 A runnable walk-through of [models](../../models.md): connections from a file, a
-Parquet model, a Delta model, a read-only model, every way to read, and what the
-guard rails refuse. It needs nothing but smallcat-chonk; it writes its
-connections file and its data under a temporary directory.
+Parquet model, a Delta model, a read-only model, writing, and what the guard
+rails refuse. For reading and filtering, see [Querying](querying.md). It needs
+nothing but smallcat-chonk; it writes its connections file and its data under a
+temporary directory.
 
 ```sh
 pip install smallcat-chonk
@@ -18,9 +19,7 @@ python models_local.py
 
 ## What it prints
 
-Reading everything, filtering with Polars, and the same query lazily (the
-filter shows up as `SELECTION` inside the Parquet scan, so it is pushed down to
-the file):
+The Parquet model was saved whole, and read back:
 
 ```text
 -- all customers
@@ -34,12 +33,6 @@ shape: (3, 4)
 │ 2   ┆ Linus ┆ null              ┆ 2024-03-09 00:00:00 │
 │ 3   ┆ Grace ┆ grace@example.com ┆ 2025-02-01 00:00:00 │
 └─────┴───────┴───────────────────┴─────────────────────┘
--- the same, lazily: the filter is pushed down into the Parquet scan
-simple π 1/1 ["name"]
-  Parquet SCAN [file:///.../lake/silver/customers.parquet]
-  PROJECT 2/4 COLUMNS
-  SELECTION: col("id") > 1
-  ESTIMATED ROWS: 3
 ```
 
 The Delta model was appended to twice and then merged by `id`: row 2 already
@@ -60,7 +53,7 @@ shape: (3, 2)
 └─────┴──────────┘
 ```
 
-And what is refused, each one *before* anything is written or read:
+And what is refused, each one *before* anything is written:
 
 ```text
 -- refusals
@@ -68,7 +61,6 @@ And what is refused, each one *before* anything is written or read:
   - id: expected Int64, got String
 [append, which the model does not allow] ModelWriteNotAllowedError: Customer does not allow 'append' (allowed: ['overwrite'])
 [write a read-only model] ModelWriteNotAllowedError: Report is read-only: it allows no write mode
-[filter + where] ModelQueryError: filter() takes Polars expressions and where() takes an SQL predicate: a query can use only one of them
 -- inside use_registry the data is separate: 0 rows
 -- outside it is untouched: 3 rows
 ```
@@ -84,3 +76,9 @@ registry.register(Customer, connection="lake")
 
 The ids are resolved and validated at that line, so a connection that is
 missing in Airflow fails at start-up and not on the first read.
+
+## Next
+
+[Querying](querying.md) reads the same kind of model with `filter`, `where`,
+`lazy` and `as_models`. [Writing with a model](../../writing-models.md) covers
+every write mode.
