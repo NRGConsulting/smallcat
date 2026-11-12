@@ -18,7 +18,7 @@ def main() -> None:
     )
     output_path = Path(__file__).parent.parent / "schemas/catalog.schema.json"
 
-    with output_path.open("w") as f:
+    with output_path.open("w", encoding="utf-8") as f:
         json.dump(schema, f, indent=2)
 
 

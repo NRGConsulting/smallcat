@@ -515,7 +515,7 @@ class Catalog(BaseModel):
             ConnectionNotLoadedError: If an entry names a connection that is not
                 in `connections`.
         """
-        with Path(dictionary_path).open() as f:
+        with Path(dictionary_path).open(encoding="utf-8") as f:
             catalog_dict = yaml.safe_load(f)
         return Catalog.from_dict(catalog_dict, connections=connections)
 

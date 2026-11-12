@@ -667,7 +667,7 @@ def test_reading_reports_a_missing_column(registry):
 
 def test_coerce_reads_strings_as_declared_types(registry):
     path = registry.connections.get("local")["extra"]["base_path"] + "/readings.csv"
-    with open(path, "w") as f:  # noqa: PTH123
+    with open(path, "w", encoding="utf-8") as f:  # noqa: PTH123
         f.write("id,value\n1,2.5\n2,3.5\n")
     out = Readings.objects.all()
     assert out.schema == {"id": pl.Int64, "value": pl.Float64}
@@ -677,7 +677,7 @@ def test_coerce_reads_strings_as_declared_types(registry):
 
 def test_coerce_reports_the_column_that_cannot_be_cast(registry):
     path = registry.connections.get("local")["extra"]["base_path"] + "/readings.csv"
-    with open(path, "w") as f:  # noqa: PTH123
+    with open(path, "w", encoding="utf-8") as f:  # noqa: PTH123
         f.write("id,value\n1,2.5\nbad,3.5\n")
     with pytest.raises(ModelSchemaValidationError) as exc:
         Readings.objects.all()

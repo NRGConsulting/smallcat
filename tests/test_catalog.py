@@ -94,3 +94,18 @@ def test_catalog_airflow_var(example_catalog, local_conn, monkeypatch):
 
     with pytest.raises(KeyError):
         catalog = Catalog.from_airflow_variable("missing_catalog")
+
+
+def test_catalog_yaml_reads_utf8_regardless_of_locale(tmp_path):
+    catalog_path = tmp_path / 'catalog.yaml'
+    catalog_path.write_bytes(
+        (
+            "entries:\n"
+            "  foo:\n"
+            "    connection: {conn_type: fs, extra: {base_path: /data}}\n"
+            "    file_format: csv\n"
+            "    location: ñandú→日本.csv\n"
+        ).encode("utf-8")
+    )
+    catalog = Catalog.from_yaml(catalog_path)
+    assert catalog.entries['foo'].location == 'ñandú→日本.csv'

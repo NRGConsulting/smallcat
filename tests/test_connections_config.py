@@ -355,3 +355,11 @@ def test_update_with_a_duplicate_name_adds_nothing():
     with pytest.raises(DuplicateConnectionError, match="a"):
         first.update(second)
     assert first.names() == ["a"]
+
+
+def test_from_yaml_reads_utf8_regardless_of_locale(tmp_path: Path):
+    path = tmp_path / "connections.yaml"
+    path.write_bytes(
+        "connections:\n  ñandú→日本:\n    conn_type: fs\n".encode("utf-8"),  # noqa: UP012
+    )
+    assert Connections.from_yaml(path).names() == ["ñandú→日本"]
