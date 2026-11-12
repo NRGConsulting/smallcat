@@ -99,7 +99,7 @@ nav:
   #       - Models: apps/about_us/models.md
   #   - Utils:
   #     - Pages: utils/pages.md
-copyright: Copyright &copy; 2023-2025 Deep Kernel Labs S.L.
+copyright: Copyright &copy; 2023-2027 NRG.
 markdown_extensions:
   - admonition
   - footnotes
