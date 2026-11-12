@@ -247,7 +247,7 @@ when a dataset uses an Airflow connection id):
     Parquet and Excel needs HMAC keys. Delta and every `scan_polars` on Parquet
     need a service account. To use both ways of reading the same Parquet file,
     put both kinds of credentials in the connection (see
-    [Parquet on GCS: load and scan](examples/gcs.md)).
+    [Parquet on GCS: load and scan](examples/catalog/gcs.md)).
 
 ### Amazon S3 (`aws`)
 

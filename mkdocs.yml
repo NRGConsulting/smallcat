@@ -5,6 +5,7 @@ strict: true
 # Planning notes for implementers: kept in the repo, not published on the site.
 exclude_docs: |
   plans/
+  issues.md
 repo_name: NRGConsulting/smallcat
 repo_url: https://github.com/NRGConsulting/smallcat
 theme:
@@ -62,24 +63,34 @@ validation:
 nav:
   - Get Started:
     - About: index.md
-    - Catalog reference: catalog-reference.md
     - Connections: connections.md
-    - Models: models.md
-    - Querying models: querying-models.md
-    - Querying a catalog: querying-catalog.md
-    - Writing data: writing-data.md
+    - Catalog and ORM: usage.md
+    - Catalog:
+      - Catalog reference: catalog-reference.md
+      - Querying a catalog: querying-catalog.md
+      - Writing data: writing-catalog.md
+    - ORM:
+      - Models: models.md
+      - Querying models: querying-models.md
+      - Writing data: writing-models.md
     # - Changelog: changelog.md
   - Examples:
-    - Standalone: examples/standalone.md
-    - Airflow: examples/airflow.md
-    - Parquet on GCS: examples/gcs.md
-    - Models: examples/models.md
-    - "Models: querying": examples/models_query.md
+    - Connections:
+      - CSV: examples/connections/csv.md
+      - Google Cloud Storage: examples/connections/gcs.md
+      - Amazon S3: examples/connections/s3.md
+    - Catalog:
+      - Connections: examples/catalog/connections.md
+      - Airflow: examples/catalog/airflow.md
+      - Parquet on GCS: examples/catalog/gcs.md
+    - ORM:
+      - Connections: examples/orm/connections.md
+      - Models: examples/orm/models.md
   - API reference:
-    - Catalog: api/catalog.md
-    - Connections: api/connections.md
-    - Models: api/models.md
     - Datasets: api/datasets.md
+    - Connections: api/connections.md
+    - Catalog: api/catalog.md
+    - Models: api/models.md
   # - Modules:
     # - Apps:
   #     - About Us:

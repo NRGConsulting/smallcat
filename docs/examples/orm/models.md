@@ -1,6 +1,6 @@
 # Models on the local filesystem
 
-A runnable walk-through of [models](../models.md): connections from a file, a
+A runnable walk-through of [models](../../models.md): connections from a file, a
 Parquet model, a Delta model, a read-only model, every way to read, and what the
 guard rails refuse. It needs nothing but smallcat-chonk; it writes its
 connections file and its data under a temporary directory.

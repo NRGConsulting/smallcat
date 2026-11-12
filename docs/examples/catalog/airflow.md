@@ -152,4 +152,4 @@ conns = Connections.from_airflow(["local_filesystem"])   # must exist and be val
 catalog = Catalog.from_airflow_variable("my_catalog", connections=conns)
 ```
 
-See [Connections](../connections.md).
+See [Connections](../../connections.md).

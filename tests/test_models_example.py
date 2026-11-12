@@ -7,10 +7,14 @@ from pathlib import Path
 
 EXAMPLES = Path(__file__).parent.parent / "docs" / "examples"
 EXAMPLE = EXAMPLES / "models_local.py"
-QUERY_EXAMPLE = EXAMPLES / "models_query.py"
 QUERYING_MODELS = EXAMPLES / "querying_models.py"
 QUERYING_CATALOG = EXAMPLES / "querying_catalog.py"
-WRITING = EXAMPLES / "writing_data.py"
+CONNECTIONS_CSV = EXAMPLES / "connections_csv.py"
+CONNECTIONS_CLOUD = EXAMPLES / "connections_cloud.py"
+CONNECTIONS_CATALOG = EXAMPLES / "connections_catalog.py"
+CONNECTIONS_ORM = EXAMPLES / "connections_orm.py"
+WRITING_CATALOG = EXAMPLES / "writing_catalog.py"
+WRITING_MODELS = EXAMPLES / "writing_models.py"
 
 
 def test_the_models_example_runs_and_the_guard_rails_refuse():
@@ -35,28 +39,6 @@ def test_the_models_example_runs_and_the_guard_rails_refuse():
     assert "[filter + where] ModelQueryError" in out
     assert "inside use_registry the data is separate: 0 rows" in out
     assert "outside it is untouched: 3 rows" in out
-
-
-def test_the_query_example_runs_and_filters_as_documented():
-    result = subprocess.run(  # noqa: S603
-        [sys.executable, "-W", "ignore", str(QUERY_EXAMPLE)],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
-        timeout=120,
-    )
-    assert result.returncode == 0, result.stderr
-    out = result.stdout
-    assert out.startswith("Connections(lake:fs)")
-    assert 'SELECTION: col("amount") > 100.0' in out  # pushed into the scan
-    assert "rows : 2" in out
-    assert "again: 1" in out  # the original query was not modified
-    assert out.count("ModelQueryError") == 4
-    # revenue per country: US 980 + 60, then UK, ES and FI (the 15.0 order is under 20)
-    assert "1040.0" in out
-    assert "240.0" in out
 
 
 def _run(script: Path) -> str:
@@ -117,8 +99,47 @@ def test_the_querying_catalog_page_prints_what_it_documents():
     assert "KeyError:" in out
 
 
-def test_the_writing_page_prints_what_it_documents():
-    out = _run(WRITING)
+def test_the_csv_connection_page_prints_what_it_documents():
+    out = _run(CONNECTIONS_CSV)
+    assert "repr            Connections(local:fs)" in out  # names and types only
+    assert "'local' in      True" in out
+    assert "conn_type       fs" in out
+    assert "local.extra.base_pth: Extra inputs are not permitted" in out
+
+
+def test_the_catalog_connection_page_prints_what_it_documents():
+    out = _run(CONNECTIONS_CATALOG)
+    assert "load            [(1, 'ada'), (2, 'linus'), (3, 'grace')]" in out
+    assert "where + columns [('linus',), ('grace',)]" in out
+    assert "entry 'sales' uses 'warehouse' (available: lake)" in out
+
+
+def test_the_orm_connection_page_prints_what_it_documents():
+    out = _run(CONNECTIONS_ORM)
+    assert "filter          [(2, 'linus'), (3, 'grace')]" in out
+    assert "archive         [(9, 'alan')]" in out
+    assert "lake, untouched [(1, 'ada'), (2, 'linus'), (3, 'grace')]" in out
+    assert "Connection 'warehouse' is not loaded (available: lake, archive)" in out
+
+
+def test_the_cloud_connections_pages_print_what_they_document():
+    out = _run(CONNECTIONS_CLOUD)
+    assert (
+        "Connections(gcs_hmac:google_cloud_platform, gcs_sa:google_cloud_platform, "
+        "s3_chain:aws, s3_keys:aws, s3_minio:aws)"
+    ) in out
+    assert "password        False" in out  # the secret is not in the repr
+    for line in (
+        "GCS HMAC keys need both `login` (key id) and `password` (secret).",
+        "Provide only one service account source, found `keyfile`, `key_path`.",
+        "`profile_name` cannot be combined with static keys",
+        "`aws_session_token` needs static keys (login/password).",
+    ):
+        assert line in out
+
+
+def test_the_writing_catalog_page_prints_what_it_documents():
+    out = _run(WRITING_CATALOG)
     assert "people_csv      [(2, 'linus', 'Helsinki')]" in out
     assert (
         "append          [(1, 'ada', 'Madrid'), (2, 'linus', 'Oslo'), (3, 'grace', 'Boston')]"
@@ -136,7 +157,12 @@ def test_the_writing_page_prints_what_it_documents():
     assert "first run       2 rows" in out
     assert "second run      2 rows" in out  # ignore: the second save did nothing
     assert "rows updated    1" in out
+
+
+def test_the_writing_models_page_prints_what_it_documents():
+    out = _run(WRITING_MODELS)
     assert "(9, 'grace', 'Austin')" in out  # merged by name
+    assert "rows updated    1" in out
     assert "overwrite       [(2, 'linus', 'Oslo')]" in out
     for line in (
         "no mode         TypeError",

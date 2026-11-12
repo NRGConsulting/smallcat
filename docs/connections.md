@@ -107,6 +107,12 @@ it is used, as before, so existing catalogs keep working.
     works, but emits a `DeprecationWarning`: it puts credentials in the
     catalog. Move the definition to a `Connections` and refer to it by name.
 
+## Example
+
+How to connect to [a CSV file](examples/connections/csv.md),
+[Google Cloud Storage](examples/connections/gcs.md) and
+[Amazon S3](examples/connections/s3.md).
+
 ## API
 
 See the [Connections reference](api/connections.md).

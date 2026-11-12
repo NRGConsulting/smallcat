@@ -11,32 +11,45 @@ engines, and each one understands a different kind of credential:
 You do **not** need two connections. One connection can carry both, and each
 engine picks the one it understands.
 
-## Catalog
+## Connection
 
 ```yaml
-entries:
-  sales:
-    file_format: parquet
-    location: sales/2024/*.parquet
-    connection:
-      conn_type: google_cloud_platform
-      login: GOOG1E...                 # HMAC key id      -> load_polars
-      password: <hmac-secret>          # HMAC secret      -> load_polars
-      extra:
-        bucket: my-bucket
-        key_path: /secrets/sa.json     # service account  -> scan_polars
+# connections.yaml
+connections:
+  gcs:
+    conn_type: google_cloud_platform
+    login: GOOG1E...                   # HMAC key id      -> load_polars
+    password: <hmac-secret>            # HMAC secret      -> load_polars
+    extra:
+      bucket: my-bucket
+      key_path: /secrets/sa.json       # service account  -> scan_polars
 ```
 
 Only one of `keyfile_dict`, `keyfile` and `key_path` may be set. `login` and
-`password` must come together.
+`password` must come together. See
+[Connect to Google Cloud Storage](../connections/gcs.md) for every credential
+option, and how to load the connection.
+
+## Catalog
+
+```yaml
+# catalog.yaml
+entries:
+  sales:
+    file_format: parquet
+    connection: gcs                    # the name defined above
+    location: sales/2024/*.parquet
+```
 
 ## Usage
 
 ```python
 import polars as pl
+from smallcat import Connections
 from smallcat.catalog import Catalog
 
-catalog = Catalog.from_yaml("catalog.yaml")
+conns = Connections.from_yaml("connections.yaml")
+catalog = Catalog.from_yaml("catalog.yaml", connections=conns)
 
 # DuckDB reads and filters with SQL. Uses the HMAC keys.
 eager = catalog.load_polars(
@@ -56,7 +69,7 @@ df = lazy.collect()   # only the needed columns and row groups are downloaded
 
 Both return the same rows. `scan_polars` pushes the filter and the columns into
 the read, which is what saves bandwidth on a bucket; see
-[Lazy scans](../index.md#lazy-scans).
+[Lazy scans](../../index.md#lazy-scans).
 
 ## When a credential is missing
 
