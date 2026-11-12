@@ -1,22 +1,44 @@
 # Models
 
+The ORM: a model describes a dataset and `Model.objects` reads and writes it. The
+model never names a [connection](connections.md): the registry does. For how to
+use it, see the [Models guide](../models.md),
+[Querying models](../querying-models.md) and
+[Writing with a model](../writing-models.md).
+
 ::: smallcat.models.model.Model
     options:
       show_root_heading: true
       members: true
 
+## Registry
+
 ::: smallcat.models.registry.ModelRegistry
     options:
+      heading_level: 3
       show_root_heading: true
       members: true
 
+::: smallcat.models.registry.Registration
+    options:
+      heading_level: 3
+      show_root_heading: true
+      members: true
+
+::: smallcat.models.registry.default_registry
+    options:
+      heading_level: 3
+      show_root_heading: true
+
 ::: smallcat.models.registry.use_registry
     options:
+      heading_level: 3
       show_root_heading: true
       members: true
 
 ::: smallcat.models.registry.current_registry
     options:
+      heading_level: 3
       show_root_heading: true
       members: true
 

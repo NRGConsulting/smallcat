@@ -88,10 +88,12 @@ nav:
       - Models: examples/orm/models.md
       - Querying: examples/orm/querying.md
   - API reference:
-    - Datasets: api/datasets.md
     - Connections: api/connections.md
-    - Catalog: api/catalog.md
-    - Models: api/models.md
+    - Catalog:
+      - Catalog: api/catalog.md
+      - Datasets: api/datasets.md
+    - ORM:
+      - Models: api/models.md
   # - Modules:
     # - Apps:
   #     - About Us:

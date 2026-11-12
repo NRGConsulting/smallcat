@@ -1,9 +1,23 @@
 # Datasets
+
+The classes that read and write each file format. You rarely build one yourself:
+a [catalog](catalog.md) returns it with `Catalog.get_dataset`, and a
+[model](models.md) builds it from its registration. They take a
+[connection](connections.md) for their storage.
+
 ::: smallcat.datasets
     options:
       show_root_heading: false
       members: false
       show_source: false
+
+## Base class
+
+::: smallcat.datasets.base_dataset.BaseDataset
+    options:
+      heading_level: 3
+      show_root_heading: true
+      members: true
 
 ## CSV
 ::: smallcat.datasets.csv_dataset
