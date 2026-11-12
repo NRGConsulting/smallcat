@@ -1,4 +1,4 @@
-# smallcat-chonk Airflow
+# Catalog with Airflow
 Use smallcat-chonk with Airflow. In this example we'll work locally by reading connections and variables from the Local Filesystem Backend. In production we could deploy the same DAG but the variables and connections would be defined in the database or a Secret Backend
 
 ## Setup
@@ -127,7 +127,7 @@ with DAG(
     def ds_pipeline():
         catalog = Catalog.from_airflow_variable("my_catalog")
 
-        df = catalog.load_polars("foo", where="event_date >= '2024-01-01'")
+        df = catalog.load_polars("foo", where="date >= '2012-01-01'")
         out = transform(df)     # Function should be pure, only IO happens in the pipeline with the catalog
         catalog.save_polars("foo_processed", out)
 

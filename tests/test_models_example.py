@@ -11,7 +11,8 @@ MODELS_QUERYING = EXAMPLES / "models_querying.py"
 QUERYING_MODELS = EXAMPLES / "querying_models.py"
 QUERYING_CATALOG = EXAMPLES / "querying_catalog.py"
 CONNECTIONS_CSV = EXAMPLES / "connections_csv.py"
-CONNECTIONS_CLOUD = EXAMPLES / "connections_cloud.py"
+CONNECTIONS_GCS = EXAMPLES / "connections_gcs.py"
+CONNECTIONS_S3 = EXAMPLES / "connections_s3.py"
 CONNECTIONS_CATALOG = EXAMPLES / "connections_catalog.py"
 CONNECTIONS_ORM = EXAMPLES / "connections_orm.py"
 WRITING_CATALOG = EXAMPLES / "writing_catalog.py"
@@ -131,16 +132,25 @@ def test_the_orm_connection_page_prints_what_it_documents():
     assert "Connection 'warehouse' is not loaded (available: lake, archive)" in out
 
 
-def test_the_cloud_connections_pages_print_what_they_document():
-    out = _run(CONNECTIONS_CLOUD)
+def test_the_gcs_connection_page_prints_what_it_documents():
+    out = _run(CONNECTIONS_GCS)
     assert (
-        "Connections(gcs_hmac:google_cloud_platform, gcs_sa:google_cloud_platform, "
-        "s3_chain:aws, s3_keys:aws, s3_minio:aws)"
+        "Connections(gcs_hmac:google_cloud_platform, gcs_sa:google_cloud_platform)"
     ) in out
     assert "password        False" in out  # the secret is not in the repr
     for line in (
         "GCS HMAC keys need both `login` (key id) and `password` (secret).",
         "Provide only one service account source, found `keyfile`, `key_path`.",
+    ):
+        assert line in out
+
+
+def test_the_s3_connection_page_prints_what_it_documents():
+    out = _run(CONNECTIONS_S3)
+    assert "Connections(s3_chain:aws, s3_profile:aws, s3_keys:aws, s3_minio:aws)" in out
+    assert "password        False" in out  # the secret is not in the repr
+    for line in (
+        "AWS static keys need both `login` (access key id) and `password`.",
         "`profile_name` cannot be combined with static keys",
         "`aws_session_token` needs static keys (login/password).",
     ):

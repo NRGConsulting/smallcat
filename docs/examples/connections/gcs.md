@@ -57,21 +57,18 @@ right there. The script below loads these definitions with placeholder keys, so
 it needs no bucket and no network:
 
 ```text
-loaded          Connections(gcs_hmac:google_cloud_platform, gcs_sa:google_cloud_platform, s3_chain:aws, s3_keys:aws, s3_minio:aws)
+loaded          Connections(gcs_hmac:google_cloud_platform, gcs_sa:google_cloud_platform)
 
 === secrets never show up
 password        False
 get() is plain  example-hmac-secret
 
 === what is refused, when the connections are loaded
-gcs: key id without secret  Value error, GCS HMAC keys need both `login` (key id) and `password` (secret).
-gcs: two service accounts   Value error, Provide only one service account source, found `keyfile`, `key_path`.
-s3: keys and a profile      Value error, `profile_name` cannot be combined with static keys (login/password): remove the keys to use the AWS credential chain.
-s3: session token only      Value error, `aws_session_token` needs static keys (login/password).
+key id without secret  Value error, GCS HMAC keys need both `login` (key id) and `password` (secret).
+two service accounts   Value error, Provide only one service account source, found `keyfile`, `key_path`.
 ```
 
 * The secret is not in `repr(conns)`, so it cannot end up in a log.
-* The last two lines are the S3 cases of [Amazon S3](s3.md).
 * A missing credential is **not** an error: smallcat warns and the read goes on
   without credentials, so on a private bucket it fails with a permissions error
   from GCS.
@@ -84,7 +81,7 @@ s3: session token only      Value error, `aws_session_token` needs static keys (
 ## The script
 
 ```python
---8<-- "docs/examples/connections_cloud.py"
+--8<-- "docs/examples/connections_gcs.py"
 ```
 
-Run it with `python connections_cloud.py`.
+Run it with `python connections_gcs.py`.
