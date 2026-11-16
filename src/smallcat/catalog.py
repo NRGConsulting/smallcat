@@ -14,7 +14,7 @@ from typing import Annotated, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
-from smallcat._airflow import AIRFLOW_INSTALL_HINT, get_base_hook
+from smallcat._airflow import AIRFLOW_INSTALL_HINT, get_base_hook, get_variable_json
 from smallcat.connections import (
     ConnectionProtocol,
     SupportedConnectionSchemas,
@@ -469,28 +469,13 @@ class Catalog(BaseModel):
 
         Raises:
             KeyError: If the Airflow Variable does not exist.
+            ValueError: If the Variable is not valid JSON.
+            ImportError: If Airflow or one of its dependencies cannot be imported.
             pydantic.ValidationError: If the JSON payload is invalid for the model.
             ConnectionNotLoadedError: If an entry names a connection that is not
                 in `connections`.
         """
-        try:
-            from airflow.sdk import Variable
-        except ImportError:
-            from airflow.models import Variable  # type: ignore[attr-defined,no-redef]
-
-        try:
-            dictionary_entries = Variable.get(variable_id, deserialize_json=True)
-        except TypeError:
-            # LocalFilesystemBackend can return an object causing a TypeError
-            # In this case we don't need to deserialize into JSON
-            #  as it's not a string
-            dictionary_entries = Variable.get(variable_id)
-        except ImportError as e:
-            # Airflow fails with import error if variable is not present and tries
-            #  to talk to the Task Supervisor (the runner process) over an internal
-            #  comms channel (SUPERVISOR_COMMS) to fetch it.
-            msg = f"Variable {variable_id} not found in Airflow"
-            raise KeyError(msg) from e
+        dictionary_entries = get_variable_json(variable_id)
         return Catalog.from_dict(dictionary_entries, connections=connections)
 
     @staticmethod
