@@ -23,7 +23,7 @@ from typing import Annotated, Any, get_args
 import yaml
 from pydantic import Field, TypeAdapter, ValidationError
 
-from smallcat._airflow import AIRFLOW_INSTALL_HINT, get_base_hook
+from smallcat._airflow import AIRFLOW_INSTALL_HINT, get_base_hook, get_variable_json
 from smallcat.connections import (
     BaseConnectionSchema,
     ConnectionProtocol,
@@ -185,20 +185,11 @@ class Connections:
 
         Raises:
             KeyError: If the Airflow Variable does not exist.
+            ValueError: If the Variable is not valid JSON.
+            ImportError: If Airflow or one of its dependencies cannot be imported.
             ConnectionsValidationError: If the content is invalid.
         """
-        try:
-            from airflow.sdk import Variable
-        except ImportError:
-            from airflow.models import Variable  # type: ignore[attr-defined,no-redef]
-
-        try:
-            content = Variable.get(variable_id, deserialize_json=True)
-        except TypeError:
-            content = Variable.get(variable_id)
-        except ImportError as e:
-            msg = f"Variable {variable_id} not found in Airflow"
-            raise KeyError(msg) from e
+        content = get_variable_json(variable_id)
         return cls.from_dict(content)
 
     @classmethod

@@ -322,7 +322,8 @@ def test_from_airflow_variable_missing(monkeypatch):
     class Variable:
         @staticmethod
         def get(variable_id: str, deserialize_json: bool = False):  # noqa: FBT001, FBT002
-            raise ImportError
+            msg = "cannot import name 'SUPERVISOR_COMMS' from 'task_runner'"
+            raise ImportError(msg)
 
     sdk = types.ModuleType("airflow.sdk")
     sdk.Variable = Variable  # type: ignore[attr-defined]
