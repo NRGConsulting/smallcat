@@ -31,7 +31,7 @@ from collections.abc import Mapping  # noqa: TC003
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from smallcat.datasets.base_dataset import BaseDataset
+from smallcat.datasets.base_dataset import BaseDataset, to_record_batch_reader
 
 if typing.TYPE_CHECKING:
     import pyarrow as pa
@@ -137,7 +137,7 @@ class CSVDataset(BaseDataset[CSVLoadOptions, CSVSaveOptions]):
         query = self._build_query("data", columns, where)
         with self._duckdb_conn() as con:
             rel = con.read_csv(full_uri, **self.load_options_dict())
-            return rel.query("data", query).fetch_record_batch()
+            return to_record_batch_reader(rel.query("data", query))
 
     def save_arrow_table(self, path: str, table: pa.Table) -> None:
         """Write a PyArrow Table to CSV.

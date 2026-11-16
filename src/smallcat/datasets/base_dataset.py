@@ -121,6 +121,33 @@ def _contains_subquery(node: object) -> bool:
     return False
 
 
+def to_record_batch_reader(rel: duckdb.DuckDBPyRelation | None) -> pa.RecordBatchReader:
+    """Return the result of a DuckDB relation as a PyArrow record batch reader.
+
+    Uses ``DuckDBPyRelation.to_arrow_reader``, which replaces the deprecated
+    ``fetch_record_batch`` (DuckDB 2). The DuckDB stubs type both the relation
+    and the reader as optional; this is the one place where that is narrowed.
+
+    Args:
+        rel: The relation to read, such as the result of ``rel.query(...)``.
+
+    Returns:
+        A reader that streams the rows in record batches.
+
+    Raises:
+        RuntimeError: If DuckDB gives no relation or no reader, which would
+            otherwise surface later as an obscure ``AttributeError``.
+    """
+    if rel is None:
+        msg = "DuckDB returned no relation for the query"
+        raise RuntimeError(msg)
+    reader = rel.to_arrow_reader()
+    if reader is None:
+        msg = "DuckDB returned no Arrow reader for the query"
+        raise RuntimeError(msg)
+    return reader
+
+
 class BaseDataset[L: BaseModel, S: BaseModel](ABC):
     """Base class for dataset loaders/savers backed by DuckDB and a connection.
 
