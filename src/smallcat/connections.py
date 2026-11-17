@@ -11,6 +11,7 @@ are compatible with :class:`ConnectionProtocol`.
 """
 
 import json
+from enum import StrEnum
 from typing import Annotated, Any, Literal, Protocol, Self
 
 from pydantic import (
@@ -21,6 +22,45 @@ from pydantic import (
     SecretStr,
     model_validator,
 )
+
+
+class ConnType(StrEnum):
+    """The connection types smallcat knows about.
+
+    Airflow connections carry ``conn_type`` as free text, so the same type can
+    arrive as ``"fs"``, ``"FS"`` or ``"Fs"``. Use :meth:`parse` to turn that text
+    into a member, and compare members instead of strings.
+
+    ``GOOGLE`` and ``S3`` are aliases of ``GOOGLE_CLOUD_PLATFORM`` and ``AWS``;
+    see :data:`GCP_CONN_TYPES` and :data:`AWS_CONN_TYPES` to match either name.
+    ``DATABRICKS`` is recognised only to be refused with a clear message.
+    """
+
+    FS = "fs"
+    GOOGLE_CLOUD_PLATFORM = "google_cloud_platform"
+    GOOGLE = "google"
+    AWS = "aws"
+    S3 = "s3"
+    DATABRICKS = "databricks"
+
+    @classmethod
+    def parse(cls, value: str | None) -> "ConnType | None":
+        """Return the member for ``value``, ignoring case, or ``None``.
+
+        Args:
+            value: The raw ``conn_type`` of a connection (may be ``None``).
+
+        Returns:
+            The matching member, or ``None`` if ``value`` is empty or is not a
+            type smallcat knows. It never raises, so callers decide what an
+            unknown type means.
+        """
+        if not value:
+            return None
+        try:
+            return cls(value.lower())
+        except ValueError:
+            return None
 
 
 def _json_to_text(value: Any) -> Any:  # noqa: ANN401
@@ -352,8 +392,11 @@ class GoogleCloudPlatformConnectionSchema(BaseConnectionSchema):
         return self
 
 
-AWS_CONN_TYPES = ("aws", "s3")
+AWS_CONN_TYPES = frozenset({ConnType.AWS, ConnType.S3})
 """Connection types handled as Amazon S3 (`aws` is the Airflow type)."""
+
+GCP_CONN_TYPES = frozenset({ConnType.GOOGLE_CLOUD_PLATFORM, ConnType.GOOGLE})
+"""Connection types handled as Google Cloud Storage (`google` is an alias)."""
 
 
 def validate_aws_credentials(

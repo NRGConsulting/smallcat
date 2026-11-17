@@ -40,9 +40,11 @@ from sqlalchemy import MetaData, Table, literal_column, select, text
 from smallcat._airflow import AIRFLOW_INSTALL_HINT, get_base_hook
 from smallcat.connections import (
     AWS_CONN_TYPES,
+    GCP_CONN_TYPES,
     GCP_SERVICE_ACCOUNT_EXTRAS,
     ConnectionLike,
     ConnectionProtocol,
+    ConnType,
     validate_aws_credentials,
     validate_gcp_credentials,
 )
@@ -500,6 +502,15 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
             stmt = stmt.where(text(f"({where})"))
         return stmt.compile(compile_kwargs={"literal_binds": True}).string
 
+    @property
+    def _conn_type(self) -> ConnType | None:
+        """The connection type as a :class:`ConnType`, ignoring case.
+
+        ``None`` when the type is missing or not one smallcat knows, so callers
+        can tell "not this type" apart from "no usable type".
+        """
+        return ConnType.parse(self.conn.conn_type)
+
     def _infer_base_uri(self) -> str | None:  # noqa: PLR0911, C901
         """Infer a base URI from the connection configuration.
 
@@ -517,10 +528,10 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
         Returns:
           The inferred base URI string, or `None` if it cannot be determined.
         """
-        ctype = (self.conn.conn_type or "").lower()
+        ctype = self._conn_type
         x = self.extras
 
-        if ctype == "fs":
+        if ctype is ConnType.FS:
             if x.get("base_uri"):
                 return normalize_file_uri(x["base_uri"])
             # allow local base path
@@ -533,7 +544,7 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
             # No base: paths stay relative to the current working directory.
             return None
 
-        if ctype in {"google_cloud_platform", "google"}:
+        if ctype in GCP_CONN_TYPES:
             if x.get("base_uri"):
                 return x["base_uri"]
             bucket = x.get("bucket")
@@ -562,8 +573,7 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
         for any base URI with a scheme other than ``file://`` (``gs://``,
         ``s3://``, ``https://``...). Local paths do not need it.
         """
-        ctype = (self.conn.conn_type or "").lower()
-        if ctype in {"google_cloud_platform", "google", *AWS_CONN_TYPES}:
+        if self._conn_type in GCP_CONN_TYPES | AWS_CONN_TYPES:
             return True
         scheme = re.match(r"^([a-zA-Z][a-zA-Z0-9+.-]*)://", self.base_uri or "")
         return scheme is not None and scheme.group(1).lower() != "file"
@@ -589,8 +599,8 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
         if self._needs_httpfs():
             ensure_extension(con, "httpfs")
 
-        ctype = (self.conn.conn_type or "").lower()
-        if ctype in {"google_cloud_platform", "google"}:
+        ctype = self._conn_type
+        if ctype in GCP_CONN_TYPES:
             self._configure_gcp_secret(con)
         elif ctype in AWS_CONN_TYPES:
             self._configure_s3_secret(con)
@@ -655,19 +665,15 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
         Raises:
           ValueError: If the connection type is not supported.
         """
-        if (self.conn.conn_type or "").lower() in AWS_CONN_TYPES:
+        if self._conn_type in AWS_CONN_TYPES:
             return self._aws_object_store_options()
-        if (self.conn.conn_type or "").lower() not in {
-            "fs",
-            "google_cloud_platform",
-            "google",
-        }:
+        if self._conn_type is not ConnType.FS and self._conn_type not in GCP_CONN_TYPES:
             msg = f"Storage options not implemented for type {self.conn.conn_type}"
             raise ValueError(
                 msg,
             )
         x = self.extras
-        if (self.conn.conn_type or "").lower() != "fs":
+        if self._conn_type is not ConnType.FS:
             validate_gcp_credentials(self.conn.login, self.conn.password, x)
 
         # keyfile_dict can be dict or JSON string
@@ -689,7 +695,8 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
         if x.get("key_path"):  # path on worker
             return {"google_service_account": x["key_path"]}
 
-        if self.conn.login and self.conn.password and self.conn.conn_type != "fs":
+        is_local = self._conn_type is ConnType.FS
+        if self.conn.login and self.conn.password and not is_local:
             warnings.warn(
                 "Delta tables and Polars scans cannot use HMAC keys (login/password) "
                 "for Google Cloud Storage: provide a service account in keyfile_dict, "

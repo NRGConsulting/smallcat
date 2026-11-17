@@ -43,6 +43,7 @@ from deltalake import DeltaTable, write_deltalake
 from deltalake.exceptions import TableNotFoundError
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from smallcat.connections import ConnType
 from smallcat.datasets.base_dataset import (
     BaseDataset,
     sql_string_literal,
@@ -202,7 +203,7 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
         Raises:
           NotImplementedError: For Databricks connections.
         """
-        if self.conn.conn_type == "databricks":
+        if self._conn_type is ConnType.DATABRICKS:
             raise NotImplementedError(DATABRICKS_UNSUPPORTED_MSG)
         table = DeltaTable(
             self._full_uri(path),
@@ -220,7 +221,7 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
     ) -> pa.RecordBatchReader:
         """Stream Delta Lake rows via DuckDB with an optional filter."""
         full_uri = self._full_uri(path)
-        if self.conn.conn_type == "databricks":
+        if self._conn_type is ConnType.DATABRICKS:
             raise NotImplementedError(DATABRICKS_UNSUPPORTED_MSG)
 
         query = self._build_query("data", columns, where)
@@ -269,7 +270,7 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
           ValueError: In merge mode, if the keys or columns are invalid or the
             keys are null or duplicated in `table`.
         """
-        if self.conn.conn_type == "databricks":
+        if self._conn_type is ConnType.DATABRICKS:
             raise NotImplementedError(DATABRICKS_UNSUPPORTED_MSG)
         opts = self.save_options
         if opts is not None and opts.mode == WriteMode.MERGE:
@@ -396,7 +397,7 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
             a column does not exist.
           TypeError: If a value has an unsupported type.
         """
-        if self.conn.conn_type == "databricks":
+        if self._conn_type is ConnType.DATABRICKS:
             raise NotImplementedError(DATABRICKS_UNSUPPORTED_MSG)
         if not predicate or not predicate.strip():
             msg = "update requires a non-empty predicate"
