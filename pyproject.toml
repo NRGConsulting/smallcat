@@ -13,7 +13,6 @@ dependencies = [
     # Airflow's constraint files resolve. The test suite passes with 2.11.0; nothing in
     # smallcat needs a newer pydantic.
     "pydantic>=2.11.0",
-    "sqlalchemy>=1.4.49",
     "pyyaml>=6.0.3",
 ]
 classifiers = [

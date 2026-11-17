@@ -124,12 +124,7 @@ def _float(label: str, value: object) -> str:
 def _str(label: str, value: object) -> str:
     if not isinstance(value, str):
         raise _bad_value(label, "str", value)
-    return _escape_colons(sql_string_literal(value))
-
-
-def _escape_colons(literal: str) -> str:
-    """Protect ``:name`` in text, which SQLAlchemy would take for a bind parameter."""
-    return literal.replace(":", "\\:")
+    return sql_string_literal(value)
 
 
 def _bool(label: str, value: object) -> str:
@@ -230,7 +225,7 @@ def _like(operator: str, value: str) -> str:
         "startswith": f"{escaped}%",
         "endswith": f"%{escaped}",
     }[operator]
-    return f"LIKE {_escape_colons(sql_string_literal(pattern))} ESCAPE '{_LIKE_ESCAPE}'"
+    return f"LIKE {sql_string_literal(pattern)} ESCAPE '{_LIKE_ESCAPE}'"
 
 
 def _sequence(label: str, value: object, size: int | None) -> list[Any]:

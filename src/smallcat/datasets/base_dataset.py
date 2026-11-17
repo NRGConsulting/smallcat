@@ -35,7 +35,6 @@ import duckdb
 import polars as pl
 import pyarrow as pa
 from pydantic import BaseModel
-from sqlalchemy import MetaData, Table, literal_column, select, text
 
 from smallcat._airflow import AIRFLOW_INSTALL_HINT, get_base_hook
 from smallcat.connections import (
@@ -490,17 +489,32 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
         columns: list[str] | None,
         where: str | None,
     ) -> str:
-        """Construct a SELECT statement using SQLAlchemy for safer quoting."""
+        """Construct ``SELECT <columns> FROM <table> [WHERE (<where>)]``.
+
+        The text is built directly: the columns are quoted by
+        :meth:`_select_columns`, the predicate is parsed by DuckDB in
+        :meth:`_validated_where` and ``table_name`` is always an internal
+        relation name. A SQL builder such as SQLAlchemy adds nothing here, and
+        its ``text()`` reads ``:name`` inside a string literal as a bind
+        parameter and rewrites it to ``NULL``.
+
+        Args:
+            table_name: The relation to select from (``"data"``).
+            columns: The columns to select, or ``None``/empty for all of them.
+            where: An optional SQL predicate, validated before use.
+
+        Returns:
+            The SQL text, with the predicate exactly as it was given.
+
+        Raises:
+            ValueError: If a column name or the predicate is not acceptable.
+        """
         where = self._validated_where(where)
-        cols: list[Any] = [literal_column(c) for c in self._select_columns(columns)]
-
-        metadata = MetaData()
-        tbl = Table(table_name, metadata)
-
-        stmt = select(*cols).select_from(tbl)
+        select_list = ", ".join(self._select_columns(columns))
+        query = f"SELECT {select_list} FROM {table_name}"  # noqa: S608  (checked parts)
         if where:
-            stmt = stmt.where(text(f"({where})"))
-        return stmt.compile(compile_kwargs={"literal_binds": True}).string
+            query += f" WHERE ({where})"
+        return query
 
     @property
     def _conn_type(self) -> ConnType | None:
