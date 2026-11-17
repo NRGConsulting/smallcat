@@ -8,9 +8,16 @@ demand through :func:`get_base_hook`.
 import json
 from typing import Any
 
+DISTRIBUTION_NAME = "smallcat-chonk"
+"""The name this package is published under (``pip install smallcat-chonk``).
+
+It is not the name to import: the package stays ``smallcat``. A test checks that
+it matches ``name`` in ``pyproject.toml``, so a rename cannot leave it behind.
+"""
+
 AIRFLOW_INSTALL_HINT = (
-    "Install it with `pip install smallcat-chonk[airflow]`, or use the Apache Airflow "
-    "already available in your environment."
+    f"Install it with `pip install {DISTRIBUTION_NAME}[airflow]`, or use the "
+    "Apache Airflow already available in your environment."
 )
 """Appended to the errors raised when an operation needs Airflow."""
 

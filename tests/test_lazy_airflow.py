@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from smallcat import _airflow
+from smallcat._airflow import DISTRIBUTION_NAME
 from smallcat.catalog import CSVEntry
 from smallcat.datasets.csv_dataset import CSVDataset
 
@@ -115,4 +116,4 @@ def test_missing_airflow_errors_point_to_the_airflow_extra():
         with pytest.raises(RuntimeError) as from_conn_id:
             CSVDataset.from_conn_id("my_conn")
     for exc in (from_entry, from_conn_id):
-        assert "pip install smallcat-chonk[airflow]" in str(exc.value)
+        assert f"pip install {DISTRIBUTION_NAME}[airflow]" in str(exc.value)
