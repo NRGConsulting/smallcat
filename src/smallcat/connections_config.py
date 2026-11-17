@@ -167,7 +167,7 @@ class Connections:
             FileNotFoundError: If the file does not exist.
             ConnectionsValidationError: If the content is invalid.
         """
-        with Path(path).open() as f:
+        with Path(path).open(encoding="utf-8") as f:
             content = yaml.safe_load(f)
         return cls.from_dict(content)
 

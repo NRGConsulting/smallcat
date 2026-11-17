@@ -74,6 +74,12 @@ exclude = [
 
 [tool.ruff.lint]
 select = ["ALL"]
+# Only the preview rules named in `select` are enabled, not all of them.
+preview = true
+explicit-preview-rules = true
+extend-select = [
+    "PLW1514",  # unspecified-encoding: text files always read/written with an explicit encoding
+]
 ignore = [
     "S101",
     "PLC0415",
