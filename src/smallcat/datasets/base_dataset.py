@@ -25,6 +25,7 @@ Dependencies:
 
 import json
 import re
+import unicodedata
 import warnings
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -417,21 +418,36 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
         if local:
             Path(local).parent.mkdir(parents=True, exist_ok=True)
 
-    def _select_clause(self, columns: list[str] | None) -> str:
-        """Return a sanitized SELECT clause for DuckDB queries.
+    def _select_columns(self, columns: list[str] | None) -> list[str]:
+        """Return the columns of a SELECT as quoted SQL identifiers.
 
-        Only allows simple identifiers (with an optional single dot) to avoid
-        basic SQL injection. Raises ``ValueError`` on invalid column names.
+        Every name is a literal column name: it is quoted (inner double quotes
+        are doubled), so reserved words (``order``), non-ASCII names (``año``)
+        and names with spaces work, and a dot is part of the name instead of a
+        qualifier. Names that are empty, or contain a double quote, a
+        semicolon or a control character, are refused.
+
+        Args:
+            columns: The requested column names, or ``None`` / empty for all.
+
+        Returns:
+            The quoted identifiers, or ``["*"]`` when no columns were requested.
+
+        Raises:
+            ValueError: If a column name is not acceptable.
         """
         if not columns:
-            return "*"
+            return ["*"]
 
-        ident_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")
         for col in columns:
-            if not ident_re.match(col):
+            if (
+                not col
+                or any(c in col for c in ('"', ";"))
+                or any(unicodedata.category(c) == "Cc" for c in col)
+            ):
                 msg = "Unsafe column name provided"
                 raise ValueError(msg)
-        return ", ".join(columns)
+        return ['"' + col.replace('"', '""') + '"' for col in columns]
 
     def _validated_where(self, where: str | None) -> str | None:
         """Validate a WHERE predicate by parsing it with DuckDB.
@@ -474,15 +490,10 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
     ) -> str:
         """Construct a SELECT statement using SQLAlchemy for safer quoting."""
         where = self._validated_where(where)
-        select_clause = self._select_clause(columns)
+        cols: list[Any] = [literal_column(c) for c in self._select_columns(columns)]
 
         metadata = MetaData()
         tbl = Table(table_name, metadata)
-        cols: list[Any] = (
-            [literal_column("*")]
-            if select_clause == "*"
-            else [literal_column(col) for col in select_clause.split(", ")]
-        )
 
         stmt = select(*cols).select_from(tbl)
         if where:
