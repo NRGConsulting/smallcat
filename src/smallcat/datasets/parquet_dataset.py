@@ -24,7 +24,7 @@ import polars as pl
 import pyarrow as pa
 from pydantic import BaseModel, ConfigDict, Field
 
-from smallcat.datasets.base_dataset import BaseDataset
+from smallcat.datasets.base_dataset import BaseDataset, to_record_batch_reader
 
 
 class ParquetLoadOptions(BaseModel):
@@ -84,7 +84,7 @@ class ParquetDataset(BaseDataset[ParquetLoadOptions, ParquetSaveOptions]):
         query = self._build_query("data", columns, where)
         with self._duckdb_conn() as con:
             rel = con.read_parquet(full_uri, **self.load_options_dict())
-            return rel.query("data", query).fetch_record_batch()
+            return to_record_batch_reader(rel.query("data", query))
 
     def scan_polars(
         self,

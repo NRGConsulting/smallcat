@@ -26,6 +26,7 @@ from smallcat.datasets.base_dataset import (
     BaseDataset,
     ensure_extension,
     sql_string_literal,
+    to_record_batch_reader,
 )
 
 
@@ -101,7 +102,7 @@ class ExcelDataset(BaseDataset[ExcelLoadOptions, ExcelSaveOptions]):
             # rewrote string literals in the user's WHERE clause).
             sql = f"SELECT * FROM read_xlsx(?{args_sql})"  # noqa: S608  (options are booleans or escaped literals)
             rel = con.sql(sql, params=[full_uri])
-            return rel.query("data", query).fetch_record_batch()
+            return to_record_batch_reader(rel.query("data", query))
 
     def save_arrow_table(self, path: str, table: pa.Table) -> None:
         """Write a PyArrow table to an .xlsx file.

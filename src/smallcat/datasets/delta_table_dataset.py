@@ -43,7 +43,11 @@ from deltalake import DeltaTable, write_deltalake
 from deltalake.exceptions import TableNotFoundError
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from smallcat.datasets.base_dataset import BaseDataset, sql_string_literal
+from smallcat.datasets.base_dataset import (
+    BaseDataset,
+    sql_string_literal,
+    to_record_batch_reader,
+)
 
 DATABRICKS_UNSUPPORTED_MSG = (
     "Databricks-hosted Delta tables are not supported yet: "
@@ -229,7 +233,7 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
         dataset = dt.to_pyarrow_dataset()
         with self._duckdb_conn() as con:
             con.register("data", dataset)
-            return con.sql(query).fetch_record_batch()
+            return to_record_batch_reader(con.sql(query))
 
     def _write_kwargs(self) -> dict:
         """Options for `write_deltalake`, without the merge-only ones."""
