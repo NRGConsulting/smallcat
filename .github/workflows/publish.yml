@@ -1,10 +1,30 @@
 # .github/workflows/publish.yml
+#
+# Publishes `smallcat-chonk` to PyPI when a version tag is pushed (`git tag v0.6.0`).
+# It uses PyPI Trusted Publishing (OIDC): there is no API token to store or leak.
+#
+# One-time setup, outside this repository:
+#   1. GitHub: Settings > Environments > create `pypi` (add yourself as a required
+#      reviewer so a release waits for approval) and `testpypi`.
+#   2. PyPI: https://pypi.org/manage/account/publishing/ > "Add a new pending
+#      publisher": project `smallcat-chonk`, owner `NRGConsulting`, repository
+#      `smallcat`, workflow `publish.yml`, environment `pypi`.
+#   3. TestPyPI (optional dry run): the same at https://test.pypi.org/manage/account/publishing/
+#      with environment `testpypi`.
+#   4. GitHub: Settings > Actions > allow actions on this fork.
+#
+# Releasing: merge to main, then `git tag vX.Y.Z && git push fork vX.Y.Z`.
+# Dry run on TestPyPI: Actions > Publish > "Run workflow", choosing the tag as the ref.
+
 name: Publish
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:      # manual run, from a tag: publishes to TestPyPI only
+
+permissions: {}
 
 jobs:
   test:
@@ -13,15 +33,26 @@ jobs:
       contents: read
     uses: ./.github/workflows/ci.yml
 
-  pypi:
+  build:
     needs: test
     runs-on: ubuntu-latest
-    environment: pypi           # gates this job behind environment approval
     permissions:
-      id-token: write
-      contents: read
+      contents: read        # the build job never gets the OIDC token
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0    # hatch-vcs derives the version from git tags
+
+      - name: Only build from a tag that is on main
+        run: |
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "::error::Run this workflow from a tag (vX.Y.Z), not from branch $GITHUB_REF_NAME."
+            exit 1
+          fi
+          if ! git branch -r --contains "$GITHUB_SHA" | grep -qx '  origin/main'; then
+            echo "::error::Tag $GITHUB_REF_NAME is not on main. Merge first, then tag."
+            exit 1
+          fi
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
@@ -32,11 +63,63 @@ jobs:
       - name: Build distributions
         run: uv build
 
+      - name: Check the package metadata
+        # Fails on a README that PyPI cannot render or on missing metadata.
+        run: uvx twine check --strict dist/*
+
+      - name: Check the version matches the tag
+        # A branch build gets a dev/local version that PyPI refuses.
+        run: |
+          built=$(uv run --isolated --no-project --with dist/*.whl python -c \
+            "import importlib.metadata as m; print(m.version('smallcat-chonk'))")
+          uv run --isolated --no-project --with packaging python -c \
+            "import sys; from packaging.version import Version as V; \
+             t, b = sys.argv[1].removeprefix('v'), sys.argv[2]; \
+             assert V(t) == V(b), f'tag {t} builds version {b}'; print('version', b)" \
+            "$GITHUB_REF_NAME" "$built"
+
       - name: Smoke test (wheel import)
         run: uv run --isolated --no-project --with dist/*.whl python -c "import smallcat; print('ok')"
 
       - name: Smoke test (sdist import)
         run: uv run --isolated --no-project --with dist/*.tar.gz python -c "import smallcat; print('ok')"
 
+      - name: Keep the distributions for the publish job
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish-testpypi:
+    # Manual dry run: same files, test index.
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write       # Trusted Publishing; nothing else is needed
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi       # gates this job behind the environment's approval
+    permissions:
+      id-token: write       # Trusted Publishing; nothing else is needed
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
       - name: Publish to PyPI
-        run: uv publish
+        uses: pypa/gh-action-pypi-publish@release/v1
