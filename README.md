@@ -20,6 +20,11 @@
 pip install smallcat-chonk
 ```
 
+> **Do not install it next to the original `smallcat`.** Both distributions put
+> the same importable package, `smallcat`, in `site-packages`, so they overwrite
+> each other's files, and uninstalling one removes files of the other. Use one
+> or the other in an environment.
+
 ## Quickstart
 ### Define connections
 

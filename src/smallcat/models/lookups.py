@@ -36,6 +36,7 @@ import datetime as dt
 import math
 from collections.abc import Callable, Mapping
 from difflib import get_close_matches
+from enum import Enum
 from typing import Any
 
 import polars as pl
@@ -263,10 +264,20 @@ def _several(
     return f"{column} IN ({', '.join(render(key, item) for item in items)})"
 
 
+def _enum_values(value: object) -> object:
+    """Replace `Enum` members (alone or in a collection) by their values."""
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, list | tuple | set | frozenset):
+        return [v.value if isinstance(v, Enum) else v for v in value]
+    return value
+
+
 def _condition(spec: FieldSpec, operator: str, value: object, key: str) -> str:
     """Render one lookup as an SQL condition."""
     column = _quote_identifier(spec.name)
     kind = kind_of(spec.dtype)
+    value = _enum_values(value)
 
     if operator == "isnull":
         if not isinstance(value, bool):

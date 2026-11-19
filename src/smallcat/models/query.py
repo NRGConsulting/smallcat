@@ -16,6 +16,7 @@ There are two ways to filter and they cannot be combined in one query:
 
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from enum import Enum
 from typing import TYPE_CHECKING, Any, Self
 
 import polars as pl
@@ -266,6 +267,17 @@ class ModelQuery[M: "Model"]:
         return frame.select(prepared.select), raw
 
 
+def _plain(value: object) -> Any:  # noqa: ANN401
+    """Replace the `Enum` members in a dumped value by their values."""
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, dict):
+        return {k: _plain(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_plain(v) for v in value]
+    return value
+
+
 def _to_frame(model: "type[Model]", data: object) -> pl.DataFrame:
     """Turn what `save` receives into a DataFrame."""
     if isinstance(data, pl.DataFrame):
@@ -287,7 +299,8 @@ def _to_frame(model: "type[Model]", data: object) -> pl.DataFrame:
         msg = f"save() expected {model.__name__} instances, found {wrong}"
         raise TypeError(msg)
     spec: ModelSchema = model.__smallcat_schema__  # type: ignore[assignment]
-    return pl.DataFrame([i.model_dump() for i in items], schema=spec.polars_schema())
+    rows = [_plain(i.model_dump()) for i in items]
+    return pl.DataFrame(rows, schema=spec.polars_schema())
 
 
 def _merge_keys_for(
