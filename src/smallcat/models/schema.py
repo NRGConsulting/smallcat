@@ -15,6 +15,7 @@ Messages never contain values from the data.
 """
 
 import datetime as dt
+import enum
 import types
 import typing
 from collections.abc import Sequence
@@ -43,7 +44,7 @@ _SIMPLE_TYPES: dict[type, pl.DataType] = {
 
 SUPPORTED_TYPES_HINT = (
     "int, float, str, bool, bytes, datetime, date, time, timedelta, "
-    "Literal of str or int, list of those, and any of them as `X | None`"
+    "Literal or Enum of str or int, list of those, and any of them as `X | None`"
 )
 
 
@@ -85,6 +86,21 @@ class ModelSchema:
         return {name: spec.dtype for name, spec in self.fields.items()}
 
 
+def _values_dtype(
+    values: Sequence[object],
+    what: str,
+    annotation: object,
+) -> pl.DataType:
+    """Return the type shared by the values of a `Literal` or an `Enum`."""
+    kinds = {type(v) for v in values}
+    if kinds == {str}:
+        return pl.String()
+    if kinds == {int}:
+        return pl.Int64()
+    msg = f"{what} values must be all str or all int ({annotation})"
+    raise UnsupportedFieldTypeError(msg)
+
+
 def dtype_of(annotation: object) -> tuple[pl.DataType, bool]:
     """Map a Python annotation to its canonical Polars type.
 
@@ -107,13 +123,10 @@ def dtype_of(annotation: object) -> tuple[pl.DataType, bool]:
         dtype, _ = dtype_of(present[0])
         return dtype, True
     if origin is Literal:
-        kinds = {type(v) for v in get_args(annotation)}
-        if kinds == {str}:
-            return pl.String(), False
-        if kinds == {int}:
-            return pl.Int64(), False
-        msg = f"Literal values must be all str or all int ({annotation})"
-        raise UnsupportedFieldTypeError(msg)
+        return _values_dtype(get_args(annotation), "Literal", annotation), False
+    if isinstance(annotation, type) and issubclass(annotation, enum.Enum):
+        values = [member.value for member in annotation]
+        return _values_dtype(values, "Enum", annotation), False
     if origin is list:
         (inner,) = get_args(annotation) or (None,)
         if inner is None:

@@ -72,6 +72,7 @@ The fields give the expected Polars types.
 | `int`, `float`, `str`, `bool`, `bytes` | `Int64`, `Float64`, `String`, `Boolean`, `Binary` |
 | `datetime`, `date`, `time`, `timedelta` | `Datetime("us")`, `Date`, `Time`, `Duration("us")` |
 | `Literal["a", "b"]`, `Literal[1, 2]` | `String`, `Int64` |
+| `Enum` (`StrEnum`, `IntEnum`, or any `Enum` whose values are all `str` or all `int`) | `String`, `Int64` (the member's value is stored) |
 | `list[T]` | `List(T)` |
 | `T \| None` | `T`, and the field accepts nulls |
 
