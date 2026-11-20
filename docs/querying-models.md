@@ -49,7 +49,8 @@ query = Order.objects.where(country="ES", amount__gte=100)
 
 query.all()          # pl.DataFrame
 query.lazy()         # pl.LazyFrame
-query.as_models()    # list[Order], validated by Pydantic
+query.all(as_models=True)   # list[Order], validated by Pydantic
+query.as_models()    # the same, as a shortcut
 query.select("id", "customer").all()   # only some fields
 ```
 
@@ -62,9 +63,9 @@ query.select("id", "customer").all()   # only some fields
 
 | Method | Returns | Notes |
 |--------|---------|-------|
-| `all()` | `pl.DataFrame` | Columns in the model's order. |
+| `all()` | `pl.DataFrame` | Columns in the model's order. With `all(as_models=True)` it returns `list[Order]` instead (see `as_models()`). Also available on `Order.objects`. |
 | `lazy()` | `pl.LazyFrame` | Chain more Polars after it. See [Lazy reads](#lazy-reads). |
-| `as_models()` | `list[Order]` | Each row is validated by Pydantic, so field constraints apply. Cannot be combined with `select()`. |
+| `as_models()` | `list[Order]` | Shortcut for `all(as_models=True)`. Each row is validated by Pydantic, so field constraints apply. Cannot be combined with `select()`. |
 | `filter(*exprs)` | query | Polars expressions; several calls are combined with AND. |
 | `where(sql=None, **lookups)` | query | An SQL predicate (DuckDB) and/or Django-style lookups such as `id__gte=10`. Usable once per query. |
 | `select(*fields)` | query | Only some fields; names must be fields of the model. |

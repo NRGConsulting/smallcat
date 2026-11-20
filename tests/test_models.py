@@ -573,6 +573,33 @@ def test_as_models_with_select_is_an_error(saved):
         Person.objects.select("id").as_models()
 
 
+def test_all_as_models_on_a_query(saved):
+    people = Person.objects.where("id <= 2").all(as_models=True)
+    assert sorted(p.id for p in people) == [1, 2]
+    assert all(isinstance(p, Person) for p in people)
+    people = Person.objects.filter(pl.col("id") <= 2).all(as_models=True)
+    assert sorted(p.id for p in people) == [1, 2]
+
+
+def test_all_as_models_on_the_manager(saved):
+    people = Person.objects.all(as_models=True)
+    assert people and all(isinstance(p, Person) for p in people)
+    assert isinstance(Person.objects.all(as_models=False), pl.DataFrame)
+    assert isinstance(Person.objects.all(), pl.DataFrame)
+
+
+def test_all_as_models_with_select_is_an_error(saved):
+    with pytest.raises(ModelQueryError, match="every field"):
+        Person.objects.select("id").all(as_models=True)
+    with pytest.raises(ModelQueryError, match="every field"):
+        Person.objects.where("id = 1").select("id").all(as_models=True)
+
+
+def test_all_takes_as_models_only_by_keyword(saved):
+    with pytest.raises(TypeError):
+        Person.objects.all(True)  # type: ignore[misc]
+
+
 def test_filter_then_where_is_an_error():
     with pytest.raises(ModelQueryError, match="only one of them"):
         Person.objects.filter(pl.col("id") > 1).where("id < 5")
