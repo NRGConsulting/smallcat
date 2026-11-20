@@ -170,10 +170,10 @@ print(by_polars, by_sql, by_lookups)
 assert by_polars == by_sql == by_lookups
 
 # 9. Running the query -----------------------------------------------------------------
-title("where() runs like any query: all(), lazy(), as_models(), select()")
+title("where() runs like any query: all(), all(as_models=True), lazy(), select()")
 query = Order.objects.where(country="ES", amount__gte=100)
 print(query.select("id", "customer").all())
-print([order.customer for order in query.as_models()])
+print([order.customer for order in query.all(as_models=True)])
 print(query.lazy().collect().height, "row")
 
 # 10. What is refused ------------------------------------------------------------------

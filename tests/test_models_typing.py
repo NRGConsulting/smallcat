@@ -24,6 +24,11 @@ def _typing_checks() -> None:
     assert_type(Customer.objects.where(id=1), ModelQuery[Customer])
     assert_type(Customer.objects.filter(pl.col("id") > 1), ModelQuery[Customer])
     assert_type(Customer.objects.as_models(), list[Customer])
+    assert_type(Customer.objects.all(), pl.DataFrame)
+    assert_type(Customer.objects.all(as_models=False), pl.DataFrame)
+    assert_type(Customer.objects.all(as_models=True), list[Customer])
+    assert_type(Customer.objects.where(id=1).all(), pl.DataFrame)
+    assert_type(Customer.objects.where(id=1).all(as_models=True), list[Customer])
 
 
 def test_objects_is_a_manager_of_the_model() -> None:

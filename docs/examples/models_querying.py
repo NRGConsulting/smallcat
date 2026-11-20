@@ -90,7 +90,8 @@ print("-- or with lookups")
 print(Customer.objects.where(id__gte=2).select("name").all().sort("name"))
 
 print("-- as model instances")
-print(Customer.objects.filter(pl.col("id") == 1).as_models())
+print(Customer.objects.filter(pl.col("id") == 1).all(as_models=True))
+print(Customer.objects.all(as_models=True))  # also on the manager
 
 # 3. A query is a value, and contradictory ones are refused where they are written. -
 print("-- a query is not run until you ask")
