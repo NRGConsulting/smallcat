@@ -17,7 +17,7 @@ There are two ways to filter and they cannot be combined in one query:
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, NoReturn, Self, overload
 
 import polars as pl
 
@@ -443,6 +443,16 @@ class ModelManager[M: "Model"]:
 
 class ManagerDescriptor:
     """Gives each model class an `objects` manager (and only the class)."""
+
+    @overload
+    def __get__[M: "Model"](
+        self,
+        instance: None,
+        owner: "type[M]",
+    ) -> ModelManager[M]: ...
+
+    @overload
+    def __get__(self, instance: object, owner: "type[Model]") -> NoReturn: ...
 
     def __get__(self, instance: object, owner: "type[Model]") -> ModelManager[Any]:
         """Return the manager of `owner`; instances do not have one."""
