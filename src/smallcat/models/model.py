@@ -70,7 +70,7 @@ class Model(BaseModel):
     subclass without one is abstract (a base for other models).
     """
 
-    objects: ClassVar[Any] = ManagerDescriptor()
+    objects: ClassVar[ManagerDescriptor] = ManagerDescriptor()
     """The manager that reads and writes the model's data. Class access only."""
 
     __smallcat_meta__: ClassVar[ModelMeta | None] = None
