@@ -175,6 +175,8 @@ choose the rows and fields:
 ```python
 Customer.objects.all()                              # pl.DataFrame
 Customer.objects.filter(pl.col("id") > 10).all()
+Customer.objects.all(as_models=True)                # list[Customer]
+Customer.objects.where(id__gt=10).all(as_models=True)
 ```
 
 The methods, every way of filtering, the operators, lazy reads and what is

@@ -5,7 +5,7 @@
 
     Customer.objects.filter(pl.col("id") > 10).select("id", "name").all()
     Customer.objects.filter(pl.col("id") > 10).lazy().group_by("name").len()
-    Customer.objects.where("id > 10").as_models()
+    Customer.objects.where("id > 10").all(as_models=True)
     Customer.objects.where(id__gt=10, country="ES").all()
 
 There are two ways to filter and they cannot be combined in one query:
