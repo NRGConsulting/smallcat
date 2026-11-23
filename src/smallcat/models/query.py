@@ -5,7 +5,7 @@
 
     Customer.objects.filter(pl.col("id") > 10).select("id", "name").all()
     Customer.objects.filter(pl.col("id") > 10).lazy().group_by("name").len()
-    Customer.objects.where("id > 10").as_models()
+    Customer.objects.where("id > 10").all(as_models=True)
     Customer.objects.where(id__gt=10, country="ES").all()
 
 There are two ways to filter and they cannot be combined in one query:
@@ -17,7 +17,7 @@ There are two ways to filter and they cannot be combined in one query:
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, Self, overload
 
 import polars as pl
 
@@ -210,15 +210,42 @@ class ModelQuery[M: "Model"]:
             return self.all().lazy()
         return self._plan(_context(self.model))[0]
 
-    def all(self) -> pl.DataFrame:
-        """Run the query and return a DataFrame.
+    @overload
+    def all(self, *, as_models: Literal[False] = False) -> pl.DataFrame: ...
+
+    @overload
+    def all(self, *, as_models: Literal[True]) -> "list[M]": ...
+
+    @overload
+    def all(self, *, as_models: bool) -> "pl.DataFrame | list[M]": ...
+
+    def all(self, *, as_models: bool = False) -> "pl.DataFrame | list[M]":
+        """Run the query and return a DataFrame, or model instances.
+
+        Args:
+            as_models: If true, return one instance of the model per row
+                instead of a DataFrame. Each row is validated by Pydantic, so
+                field constraints apply.
 
         Returns:
-            The rows, with the model's columns in its order.
+            The rows as a DataFrame with the model's columns in its order, or
+            as a list of instances when `as_models` is true.
 
         Raises:
+            ModelQueryError: If `as_models` is true and the query uses
+                `select()`, since instances need every required field.
             ModelSchemaValidationError: If the data does not match the model.
         """
+        if not as_models:
+            return self._frame()
+        if self.columns is not None:
+            msg = "as_models() needs every field: remove select()"
+            raise ModelQueryError(msg)
+        rows = self._frame().iter_rows(named=True)
+        return [self.model.model_validate(row) for row in rows]
+
+    def _frame(self) -> pl.DataFrame:
+        """Run the query and return the validated DataFrame."""
         ctx = _context(self.model)
         selected = list(self.columns) if self.columns else None
         if self.where_sql is not None:
@@ -240,7 +267,7 @@ class ModelQuery[M: "Model"]:
     def as_models(self) -> "list[M]":
         """Run the query and return instances of the model.
 
-        Each row is validated by Pydantic, so field constraints apply.
+        Shortcut for ``all(as_models=True)``.
 
         Returns:
             One instance per row.
@@ -249,12 +276,7 @@ class ModelQuery[M: "Model"]:
             ModelQueryError: If the query uses `select()`, since instances
                 need every required field.
         """
-        if self.columns is not None:
-            msg = "as_models() needs every field: remove select()"
-            raise ModelQueryError(msg)
-        return [
-            self.model.model_validate(row) for row in self.all().iter_rows(named=True)
-        ]
+        return self.all(as_models=True)
 
     def _plan(self, ctx: _Context) -> tuple[pl.LazyFrame, pl.LazyFrame]:
         """Build the lazy plan and return it with the unfiltered scan."""
@@ -352,9 +374,18 @@ class ModelManager[M: "Model"]:
     def _query(self) -> ModelQuery[M]:
         return ModelQuery(self.model)
 
-    def all(self) -> pl.DataFrame:
+    @overload
+    def all(self, *, as_models: Literal[False] = False) -> pl.DataFrame: ...
+
+    @overload
+    def all(self, *, as_models: Literal[True]) -> list[M]: ...
+
+    @overload
+    def all(self, *, as_models: bool) -> pl.DataFrame | list[M]: ...
+
+    def all(self, *, as_models: bool = False) -> pl.DataFrame | list[M]:
         """Read every row. See :meth:`ModelQuery.all`."""
-        return self._query().all()
+        return self._query().all(as_models=as_models)
 
     def filter(self, *predicates: pl.Expr) -> ModelQuery[M]:
         """Start a query with Polars predicates. See :meth:`ModelQuery.filter`."""
@@ -374,7 +405,7 @@ class ModelManager[M: "Model"]:
 
     def as_models(self) -> list[M]:
         """Read every row as model instances. See :meth:`ModelQuery.as_models`."""
-        return self._query().as_models()
+        return self._query().all(as_models=True)
 
     def save(
         self,
@@ -443,6 +474,16 @@ class ModelManager[M: "Model"]:
 
 class ManagerDescriptor:
     """Gives each model class an `objects` manager (and only the class)."""
+
+    @overload
+    def __get__[M: "Model"](
+        self,
+        instance: None,
+        owner: "type[M]",
+    ) -> ModelManager[M]: ...
+
+    @overload
+    def __get__(self, instance: object, owner: "type[Model]") -> NoReturn: ...
 
     def __get__(self, instance: object, owner: "type[Model]") -> ModelManager[Any]:
         """Return the manager of `owner`; instances do not have one."""
