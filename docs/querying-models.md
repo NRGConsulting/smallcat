@@ -294,3 +294,41 @@ python querying_models.py
 ```python
 --8<-- "docs/examples/querying_models.py"
 ```
+
+## Custom managers
+
+`Order.objects` is a `ModelManager`. To give a model methods of its own, subclass
+`ModelManager` and declare it as `objects`:
+
+```python
+from smallcat.models import Model, ModelManager
+
+
+class OrderManager(ModelManager["Order"]):
+    def get_by_id(self, id: int) -> "Order | None":
+        rows = self.where(id=id).all(as_models=True)
+        return rows[0] if rows else None
+
+
+class Order(Model):
+    id: int
+    objects = OrderManager()
+
+    class Meta:
+        location = "silver/orders"
+        file_format = "parquet"
+
+
+Order.objects.get_by_id(3)   # Order | None
+Order.objects.where(id=3)    # still available
+```
+
+* Without `objects = ...` a model uses the default `ModelManager`, typed for
+  that model (`list[Order]`).
+* `ModelManager["Order"]` is optional. Without it the results are typed
+  `list[Model]`; with it, `list[Order]`. When given, it must name the model that
+  declares the manager, or defining the model raises `ModelDefinitionError`.
+* A model that inherits from `Order` gets the manager bound to itself.
+* `objects` is a reserved name: anything that is not a `ModelManager` (a field,
+  a number, the manager class instead of an instance) raises
+  `ModelDefinitionError`.

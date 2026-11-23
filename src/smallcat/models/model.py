@@ -29,7 +29,7 @@ from pydantic import BaseModel
 from smallcat.models.errors import ModelDefinitionError
 from smallcat.models.formats import unsupported_fields
 from smallcat.models.meta import ModelMeta, parse_meta
-from smallcat.models.query import ManagerDescriptor
+from smallcat.models.query import ManagerDescriptor, ModelManager
 from smallcat.models.schema import (
     ExtraPolicy,
     FieldSpec,
@@ -71,7 +71,11 @@ class Model(BaseModel):
     """
 
     objects: ClassVar[ManagerDescriptor] = ManagerDescriptor()
-    """The manager that reads and writes the model's data. Class access only."""
+    """The manager that reads and writes the model's data. Class access only.
+
+    `objects` is reserved: a subclass can only replace it with a
+    :class:`ModelManager` (see there to add methods of your own).
+    """
 
     __smallcat_meta__: ClassVar[ModelMeta | None] = None
     __smallcat_schema__: ClassVar[ModelSchema | None] = None
@@ -80,6 +84,17 @@ class Model(BaseModel):
     def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:  # noqa: ANN401
         """Validate `Meta` and derive the schema when a model is defined."""
         super().__pydantic_init_subclass__(**kwargs)
+        declared = cls.__dict__.get("objects", None)
+        if "objects" in cls.model_fields or (
+            declared is not None
+            and not isinstance(declared, ModelManager | ManagerDescriptor)
+        ):
+            msg = (
+                f"'objects' is a reserved name on models: in {cls.__name__} it "
+                "must be a ModelManager instance (e.g. objects = "
+                f"CustomerManager()), got {type(declared).__name__}"
+            )
+            raise ModelDefinitionError(msg)
         meta_class = getattr(cls, "Meta", None)
         if meta_class is None:
             return
