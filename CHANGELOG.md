@@ -3,6 +3,21 @@
 All notable changes to `smallcat-chonk` are listed here. The version is taken
 from the git tag (`vX.Y.Z`).
 
+## 0.6.3 - 2026-11-23
+
+### Added
+
+- A model can declare its own manager with methods of its own, such as
+  `get_by_id`: subclass `ModelManager` and assign it to `objects`
+  (`objects = CustomerManager()`). `ModelManager["Customer"]` types the results
+  as `list[Customer]` (`list[Model]` without it) and must name the model that
+  declares the manager. `objects` is now a reserved name: anything that is not a
+  `ModelManager` raises `ModelDefinitionError`.
+- `ManagerDescriptor` and `UnsupportedFieldTypeError` are exported from
+  `smallcat.models`; `Catalog` and the connection errors from `smallcat`; the
+  `*LoadOptions` and `*SaveOptions` classes from `smallcat.datasets`. IDE
+  auto-import now finds them.
+
 ## 0.6.2 - 2026-11-23
 
 ### Added
