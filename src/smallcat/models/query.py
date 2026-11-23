@@ -14,15 +14,29 @@ There are two ways to filter and they cannot be combined in one query:
 `select()` combines with either.
 """
 
+import copy
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Literal, NoReturn, Self, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ForwardRef,
+    Generic,
+    Literal,
+    NoReturn,
+    Self,
+    get_args,
+    get_origin,
+    overload,
+)
 
 import polars as pl
+from typing_extensions import TypeVar
 
 from smallcat.models.enums import ModelValidationMode, ModelWriteMode, parse_enum
 from smallcat.models.errors import (
+    ModelDefinitionError,
     ModelQueryError,
     ModelUnsupportedWriteModeError,
     ModelWriteNotAllowedError,
@@ -364,12 +378,97 @@ def _merge_keys_for(
     return keys
 
 
-class ModelManager[M: "Model"]:
-    """The entry point to a model's data: `Model.objects`."""
+def _declared_models(manager_cls: type) -> list[Any]:
+    """The model arguments written as `ModelManager[...]` in a manager's bases."""
+    found: list[Any] = []
+    for klass in manager_cls.__mro__:
+        for base in getattr(klass, "__orig_bases__", ()):
+            origin = get_origin(base)
+            if isinstance(origin, type) and issubclass(origin, ModelManager):
+                found.extend(a for a in get_args(base) if not isinstance(a, TypeVar))
+    return found
 
-    def __init__(self, model: "type[M]") -> None:
-        """Create the manager of a model."""
-        self.model = model
+
+M = TypeVar("M", bound="Model", default="Model")
+
+
+class ModelManager(Generic[M]):
+    """The entry point to a model's data: `Model.objects`.
+
+    Subclass it to add methods of your own and declare it on the model:
+
+        class CustomerManager(ModelManager["Customer"]):
+            def get_by_id(self, id: int) -> "Customer | None":
+                rows = self.where(id=id).all(as_models=True)
+                return rows[0] if rows else None
+
+        class Customer(Model):
+            objects = CustomerManager()
+
+    The manager is bound to the model that declares it (and to its subclasses)
+    when it is accessed. The ``["Customer"]`` is optional: it only types the
+    results (``list[Customer]`` instead of ``list[Model]``) and, when given,
+    must name the model that uses the manager.
+    """
+
+    def __init__(self, model: "type[M] | None" = None) -> None:
+        """Create a manager, bound to `model` or free to be declared on one."""
+        self._model = model
+
+    @property
+    def model(self) -> "type[M]":
+        """The model this manager reads and writes."""
+        if self._model is None:
+            msg = (
+                f"{type(self).__name__} is not bound to a model: declare it as "
+                "'objects' in a Model subclass"
+            )
+            raise ModelDefinitionError(msg)
+        return self._model
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        """Check, when declared, that the manager is typed for this model."""
+        if name != "objects":
+            msg = (
+                f"A manager must be declared as 'objects', not '{name}' "
+                f"(in {owner.__name__})"
+            )
+            raise ModelDefinitionError(msg)
+        for arg in _declared_models(type(self)):
+            if isinstance(arg, type):
+                ok = issubclass(owner, arg)
+                declared = arg.__name__
+            else:
+                declared = arg.__forward_arg__ if isinstance(arg, ForwardRef) else arg
+                short = str(declared).rsplit(".", 1)[-1]
+                ok = any(k.__name__ == short for k in owner.__mro__)
+            if not ok:
+                self._mismatch(owner, str(declared))
+
+    def _mismatch(self, owner: type, declared: str) -> NoReturn:
+        msg = (
+            f"{type(self).__name__} is typed for '{declared}' but is used in "
+            f"'{owner.__name__}' (ModelManager[\"{declared}\"] must match the "
+            "model that declares it)"
+        )
+        raise ModelDefinitionError(msg)
+
+    @overload
+    def __get__(self, instance: None, owner: type) -> Self: ...
+
+    @overload
+    def __get__(self, instance: object, owner: type) -> NoReturn: ...
+
+    def __get__(self, instance: object, owner: type) -> Self:
+        """Return the manager bound to `owner`; instances do not have one."""
+        if instance is not None:
+            msg = "'objects' is only available on the model class, not on instances"
+            raise AttributeError(msg)
+        if self._model is owner:
+            return self
+        bound = copy.copy(self)
+        bound._model = owner  # noqa: SLF001
+        return bound
 
     def _query(self) -> ModelQuery[M]:
         return ModelQuery(self.model)
