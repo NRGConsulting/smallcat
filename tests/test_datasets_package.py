@@ -18,9 +18,17 @@ from smallcat.datasets.parquet_dataset import (
 EXPORTS = {
     "BaseDataset": "smallcat.datasets.base_dataset",
     "CSVDataset": "smallcat.datasets.csv_dataset",
+    "CSVLoadOptions": "smallcat.datasets.csv_dataset",
+    "CSVSaveOptions": "smallcat.datasets.csv_dataset",
     "DeltaTableDataset": "smallcat.datasets.delta_table_dataset",
+    "DeltaTableLoadOptions": "smallcat.datasets.delta_table_dataset",
+    "DeltaTableSaveOptions": "smallcat.datasets.delta_table_dataset",
     "ExcelDataset": "smallcat.datasets.excel_dataset",
+    "ExcelLoadOptions": "smallcat.datasets.excel_dataset",
+    "ExcelSaveOptions": "smallcat.datasets.excel_dataset",
     "ParquetDataset": "smallcat.datasets.parquet_dataset",
+    "ParquetLoadOptions": "smallcat.datasets.parquet_dataset",
+    "ParquetSaveOptions": "smallcat.datasets.parquet_dataset",
 }
 
 

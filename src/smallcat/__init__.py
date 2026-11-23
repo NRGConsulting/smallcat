@@ -59,7 +59,15 @@ import importlib
 import typing
 
 if typing.TYPE_CHECKING:
-    from smallcat.connections_config import Connections
+    from smallcat.catalog import Catalog
+    from smallcat.connections_config import (
+        ConnectionNotFoundError,
+        ConnectionNotLoadedError,
+        Connections,
+        ConnectionsError,
+        ConnectionsValidationError,
+        DuplicateConnectionError,
+    )
     from smallcat.models import (
         Model,
         ModelFileFormat,
@@ -73,7 +81,25 @@ if typing.TYPE_CHECKING:
 # Public names are resolved on first access, so `import smallcat` stays light:
 # it does not import Polars, DuckDB or Airflow. Each maps to (module, attribute).
 _LAZY_EXPORTS = {
+    "Catalog": ("smallcat.catalog", "Catalog"),
+    "ConnectionNotFoundError": (
+        "smallcat.connections_config",
+        "ConnectionNotFoundError",
+    ),
+    "ConnectionNotLoadedError": (
+        "smallcat.connections_config",
+        "ConnectionNotLoadedError",
+    ),
     "Connections": ("smallcat.connections_config", "Connections"),
+    "ConnectionsError": ("smallcat.connections_config", "ConnectionsError"),
+    "ConnectionsValidationError": (
+        "smallcat.connections_config",
+        "ConnectionsValidationError",
+    ),
+    "DuplicateConnectionError": (
+        "smallcat.connections_config",
+        "DuplicateConnectionError",
+    ),
     "Model": ("smallcat.models", "Model"),
     "ModelFileFormat": ("smallcat.models", "ModelFileFormat"),
     "ModelRegistry": ("smallcat.models", "ModelRegistry"),
@@ -84,7 +110,13 @@ _LAZY_EXPORTS = {
 }
 
 __all__ = [
+    "Catalog",
+    "ConnectionNotFoundError",
+    "ConnectionNotLoadedError",
     "Connections",
+    "ConnectionsError",
+    "ConnectionsValidationError",
+    "DuplicateConnectionError",
     "Model",
     "ModelFileFormat",
     "ModelRegistry",
