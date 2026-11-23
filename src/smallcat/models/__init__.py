@@ -32,7 +32,7 @@ from smallcat.models.errors import (
     SchemaIssue,
 )
 from smallcat.models.model import Model
-from smallcat.models.query import ModelManager, ModelQuery
+from smallcat.models.query import ManagerDescriptor, ModelManager, ModelQuery
 from smallcat.models.registry import (
     ModelRegistry,
     Registration,
@@ -40,8 +40,10 @@ from smallcat.models.registry import (
     default_registry,
     use_registry,
 )
+from smallcat.models.schema import UnsupportedFieldTypeError
 
 __all__ = [
+    "ManagerDescriptor",
     "Model",
     "ModelDefinitionError",
     "ModelError",
@@ -59,6 +61,7 @@ __all__ = [
     "ModelWriteNotAllowedError",
     "Registration",
     "SchemaIssue",
+    "UnsupportedFieldTypeError",
     "current_registry",
     "default_registry",
     "use_registry",

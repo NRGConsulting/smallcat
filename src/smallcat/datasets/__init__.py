@@ -10,6 +10,11 @@ Available datasets:
   * :class:`ExcelDataset`
   * :class:`DeltaTableDataset`
   * :class:`BaseDataset` (abstract)
+
+Each dataset's option models are re-exported too (`CSVLoadOptions`,
+`CSVSaveOptions`, `ParquetLoadOptions`, ...). The generic enums of the Delta
+module (`WriteMode`, `SchemaMode`) are not: import them from
+`smallcat.datasets.delta_table_dataset`.
 """
 
 from __future__ import annotations
@@ -19,25 +24,57 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from smallcat.datasets.base_dataset import BaseDataset
-    from smallcat.datasets.csv_dataset import CSVDataset
-    from smallcat.datasets.delta_table_dataset import DeltaTableDataset
-    from smallcat.datasets.excel_dataset import ExcelDataset
-    from smallcat.datasets.parquet_dataset import ParquetDataset
+    from smallcat.datasets.csv_dataset import (
+        CSVDataset,
+        CSVLoadOptions,
+        CSVSaveOptions,
+    )
+    from smallcat.datasets.delta_table_dataset import (
+        DeltaTableDataset,
+        DeltaTableLoadOptions,
+        DeltaTableSaveOptions,
+    )
+    from smallcat.datasets.excel_dataset import (
+        ExcelDataset,
+        ExcelLoadOptions,
+        ExcelSaveOptions,
+    )
+    from smallcat.datasets.parquet_dataset import (
+        ParquetDataset,
+        ParquetLoadOptions,
+        ParquetSaveOptions,
+    )
 
 _EXPORTS = {
     "BaseDataset": "smallcat.datasets.base_dataset",
     "CSVDataset": "smallcat.datasets.csv_dataset",
+    "CSVLoadOptions": "smallcat.datasets.csv_dataset",
+    "CSVSaveOptions": "smallcat.datasets.csv_dataset",
     "DeltaTableDataset": "smallcat.datasets.delta_table_dataset",
+    "DeltaTableLoadOptions": "smallcat.datasets.delta_table_dataset",
+    "DeltaTableSaveOptions": "smallcat.datasets.delta_table_dataset",
     "ExcelDataset": "smallcat.datasets.excel_dataset",
+    "ExcelLoadOptions": "smallcat.datasets.excel_dataset",
+    "ExcelSaveOptions": "smallcat.datasets.excel_dataset",
     "ParquetDataset": "smallcat.datasets.parquet_dataset",
+    "ParquetLoadOptions": "smallcat.datasets.parquet_dataset",
+    "ParquetSaveOptions": "smallcat.datasets.parquet_dataset",
 }
 
 __all__ = [
     "BaseDataset",
     "CSVDataset",
+    "CSVLoadOptions",
+    "CSVSaveOptions",
     "DeltaTableDataset",
+    "DeltaTableLoadOptions",
+    "DeltaTableSaveOptions",
     "ExcelDataset",
+    "ExcelLoadOptions",
+    "ExcelSaveOptions",
     "ParquetDataset",
+    "ParquetLoadOptions",
+    "ParquetSaveOptions",
 ]
 
 
