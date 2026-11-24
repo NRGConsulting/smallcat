@@ -3,6 +3,18 @@
 All notable changes to `smallcat-chonk` are listed here. The version is taken
 from the git tag (`vX.Y.Z`).
 
+## 0.6.5 - 2026-11-24
+
+### Added
+
+- A model stores a `NaN` as `None` in the fields that admit `None` (`T | None`),
+  so the empty cells that pandas hands over (an Excel sheet with blanks, for
+  instance) need no validator of your own. A field that does not admit `None`
+  keeps its `NaN`, which is a valid `float`. Set `nan_as_none = False` on a
+  model to keep the `NaN` in its nullable fields too; subclasses inherit it.
+  DataFrames are not affected, and `all(as_models=True)` builds instances, so
+  there a `NaN` becomes `None`.
+
 ## 0.6.4 - 2026-11-24
 
 ### Added
