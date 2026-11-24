@@ -15,6 +15,7 @@ There are two ways to filter and they cannot be combined in one query:
 """
 
 import copy
+import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from enum import Enum
@@ -505,6 +506,34 @@ class ModelManager(Generic[M]):
     def as_models(self) -> list[M]:
         """Read every row as model instances. See :meth:`ModelQuery.as_models`."""
         return self._query().all(as_models=True)
+
+    def create_table(self) -> bool:
+        """Create the model's dataset, empty, if it does not exist yet.
+
+        Reading a model whose table or file has not been written yet fails.
+        This creates it with no rows and the model's schema (a Delta table, or
+        a CSV, Parquet or Excel file). Nothing is done if it already exists.
+
+        A model that allows no write mode (read-only) is not created: a
+        warning is emitted instead of an error.
+
+        Returns:
+            True if it was created; False if it already existed or the model
+            is read-only.
+        """
+        model = self.model
+        registry = current_registry()
+        if not registry.get(model).allowed_write_modes:
+            msg = f"{model.__name__} is read-only: its dataset was not created"
+            warnings.warn(msg, UserWarning, stacklevel=2)
+            return False
+        spec: ModelSchema = model.__smallcat_schema__  # type: ignore[assignment]
+        entry = registry.entry_for(model)
+        if entry.exists():
+            return False
+        schema = pl.DataFrame(schema=spec.polars_schema()).to_arrow().schema
+        entry.create_empty(schema)
+        return True
 
     def save(
         self,

@@ -166,6 +166,14 @@ class EntryBase(BaseModel, ABC):
         """
         self.build_dataset().save_polars(self.location, df)
 
+    def exists(self) -> bool:
+        """Return whether this entry's dataset already exists at ``location``."""
+        return self.build_dataset().exists(self.location)
+
+    def create_empty(self, schema: "pa.Schema") -> None:
+        """Create this entry's dataset empty, with the given Arrow schema."""
+        self.build_dataset().create_empty(self.location, schema)
+
     def scan_polars(self, columns: list[str] | None = None) -> "pl.LazyFrame":
         """Lazily scan this entry's dataset as a Polars LazyFrame.
 

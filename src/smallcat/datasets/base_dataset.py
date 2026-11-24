@@ -345,6 +345,35 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
         """
         self.save_arrow_table(path, table=df.to_arrow())
 
+    def exists(self, path: str) -> bool:
+        """Return whether data already exists at ``path``.
+
+        The default checks for a file (or glob) through DuckDB, so it works on
+        local paths and on object stores alike. Delta overrides it.
+
+        Args:
+          path: Relative dataset path under the connection base.
+
+        Returns:
+          True if there is at least one file at the location.
+        """
+        full_uri = self._full_uri(path)
+        local = local_path_from_uri(full_uri)
+        if local and Path(local).exists():
+            return True
+        with self._duckdb_conn() as con:
+            row = con.execute("SELECT count(*) FROM glob(?)", [full_uri]).fetchone()
+        return bool(row and row[0])
+
+    def create_empty(self, path: str, schema: pa.Schema) -> None:
+        """Create an empty dataset (no rows) with the given schema.
+
+        Args:
+          path: Relative dataset path under the connection base.
+          schema: The Arrow schema of the new dataset.
+        """
+        self.save_arrow_table(path, schema.empty_table())
+
     def scan_polars(
         self,
         path: str,
