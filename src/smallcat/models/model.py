@@ -20,11 +20,18 @@ Field values are validated by Pydantic whenever an instance is built. DataFrames
 are validated for columns, types and nulls only (see
 :mod:`smallcat.models.schema`); `Meta.validation_mode` sets how strictly. Column
 names are the field names: aliases are not used.
+
+A `NaN` given to a field that admits `None` (`X | None`) is stored as `None`:
+that is how pandas hands over empty cells. Set `nan_as_none = False` on a model
+to keep the `NaN`. A field that does not admit `None` is never changed.
 """
 
+import math
+import types
+import typing
 from typing import Any, ClassVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from smallcat.models.errors import ModelDefinitionError
 from smallcat.models.formats import unsupported_fields
@@ -43,6 +50,13 @@ def _extra_policy(model: "type[Model]") -> ExtraPolicy:
     """Read how the model treats columns it does not declare."""
     extra = model.model_config.get("extra")
     return extra if extra in ("ignore", "allow") else "forbid"  # type: ignore[return-value]
+
+
+def _admits_none(annotation: object) -> bool:
+    """Return whether an annotation is `X | None` (or `Optional[X]`)."""
+    if typing.get_origin(annotation) in (typing.Union, types.UnionType):
+        return type(None) in typing.get_args(annotation)
+    return False
 
 
 def _build_schema(model: "type[Model]") -> ModelSchema:
@@ -77,6 +91,9 @@ class Model(BaseModel):
     :class:`ModelManager` (see there to add methods of your own).
     """
 
+    nan_as_none: ClassVar[bool] = True
+    """Store a `NaN` given to an `X | None` field as `None` (default `True`)."""
+
     __smallcat_meta__: ClassVar[ModelMeta | None] = None
     __smallcat_schema__: ClassVar[ModelSchema | None] = None
 
@@ -108,9 +125,31 @@ class Model(BaseModel):
         if problems:
             details = "\n  - ".join(problems)
             msg = (
-                f"{cls.__name__} has fields its file format cannot hold:"
-                f"\n  - {details}"
+                f"{cls.__name__} has fields its file format cannot hold:\n  - {details}"
             )
             raise ModelDefinitionError(msg)
         cls.__smallcat_meta__ = meta
         cls.__smallcat_schema__ = schema
+
+    @model_validator(mode="before")
+    @classmethod
+    def _nan_to_none(cls, data: object) -> object:
+        """Turn `NaN` into `None` in the fields that admit `None`.
+
+        Empty cells come from pandas as `NaN`. Fields that do not admit `None`
+        keep their value: `NaN` is a valid `float`.
+        """
+        if not cls.nan_as_none or not isinstance(data, dict):
+            return data
+        fixed: dict[Any, Any] | None = None
+        for name, info in cls.model_fields.items():
+            value = data.get(name)
+            if (
+                isinstance(value, float)
+                and math.isnan(value)
+                and _admits_none(info.annotation)
+            ):
+                if fixed is None:
+                    fixed = dict(data)
+                fixed[name] = None
+        return data if fixed is None else fixed
