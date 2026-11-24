@@ -236,6 +236,40 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
             con.register("data", dataset)
             return to_record_batch_reader(con.sql(query))
 
+    def exists(self, path: str) -> bool:
+        """Return whether a Delta table (with a transaction log) exists at ``path``.
+
+        Raises:
+          NotImplementedError: If the connection type is ``databricks``.
+        """
+        if self._conn_type is ConnType.DATABRICKS:
+            raise NotImplementedError(DATABRICKS_UNSUPPORTED_MSG)
+        try:
+            DeltaTable(
+                self._full_uri(path),
+                storage_options=self._delta_storage_options(),
+            )
+        except TableNotFoundError:
+            return False
+        return True
+
+    def create_empty(self, path: str, schema: pa.Schema) -> None:
+        """Create an empty Delta table with the given schema.
+
+        Does nothing if the table already exists.
+
+        Raises:
+          NotImplementedError: If the connection type is ``databricks``.
+        """
+        if self._conn_type is ConnType.DATABRICKS:
+            raise NotImplementedError(DATABRICKS_UNSUPPORTED_MSG)
+        DeltaTable.create(
+            self._full_uri(path),
+            schema=schema,
+            mode="ignore",
+            storage_options=self._delta_storage_options(),
+        )
+
     def _write_kwargs(self) -> dict:
         """Options for `write_deltalake`, without the merge-only ones."""
         kwargs = self.save_options_dict()

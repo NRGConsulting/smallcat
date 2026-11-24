@@ -69,6 +69,7 @@ query.select("id", "customer").all()   # only some fields
 | `filter(*exprs)` | query | Polars expressions; several calls are combined with AND. |
 | `where(sql=None, **lookups)` | query | An SQL predicate (DuckDB) and/or Django-style lookups such as `id__gte=10`. Usable once per query. |
 | `select(*fields)` | query | Only some fields; names must be fields of the model. |
+| `create_table()` | `bool` | Creates the dataset empty, with the model's schema, if it does not exist. See [Creating the table](#creating-the-table). |
 
 ## `filter`: Polars expressions
 
@@ -263,6 +264,25 @@ full and then wrapped. A query with `where()` runs its SQL immediately.
 made on a frame you collect yourself: nulls in required fields (use `all()`),
 and, in `COERCE` mode, values that cannot be cast, which fail with a Polars
 error when collected.
+
+## Creating the table
+
+Reading a model whose table or file has not been written yet fails (for Delta,
+`TableNotFoundError: No files in log segment`). `create_table()` creates it empty:
+
+```python
+Jobs.objects.create_table()   # True: created; False: it already existed
+Jobs.objects.all()            # an empty DataFrame with the model's columns
+```
+
+- Delta creates the table; CSV, Parquet and Excel create the file with no rows.
+- If it exists, nothing is touched.
+- A model that allows no write mode (read-only) is not created: a `UserWarning`
+  is emitted and it returns `False`, with no error.
+- An empty CSV or Excel file has no types: its columns are read as text. With the
+  default `strict` validation that fails on read, so use
+  `validation_mode = "coerce"` in `Meta` for those formats. Excel also needs
+  `header: True` in `load_options` and `save_options`.
 
 ## What fails, and where
 
