@@ -3,6 +3,18 @@
 All notable changes to `smallcat-chonk` are listed here. The version is taken
 from the git tag (`vX.Y.Z`).
 
+## 0.6.4 - 2026-11-24
+
+### Added
+
+- `Model.objects.create_table()` creates the model's dataset, empty and with the
+  model's schema, if it does not exist yet: a Delta table, or a CSV, Parquet or
+  Excel file. It returns `True` if it created it and `False` if it already
+  existed. A model that allows no write mode is not created: a `UserWarning` is
+  emitted and it returns `False`. Datasets and catalog entries gain `exists()`
+  and `create_empty()`. An empty CSV or Excel file has no types, so those models
+  need `validation_mode = "coerce"` to be read.
+
 ## 0.6.3 - 2026-11-23
 
 ### Added
