@@ -98,6 +98,17 @@ Customer.objects.save(
     ],
     mode=ModelWriteMode.OVERWRITE,
 )
+# A NaN (what pandas gives for an empty cell) in a `T | None` field is stored as
+# None, so no validator of your own is needed.
+print(
+    "-- NaN in a nullable field:",
+    Customer(
+        id=4,
+        name="Alan",
+        email=float("nan"),  # type: ignore[arg-type]
+        created_at=datetime(2025, 5, 1),
+    ).email,
+)
 Event.objects.save(
     pl.DataFrame({"id": [1], "kind": ["signup"]}),
     mode=ModelWriteMode.APPEND,

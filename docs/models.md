@@ -80,6 +80,30 @@ Any other type (`dict`, nested models, unions of several types, `Decimal`...)
 is rejected with `ModelDefinitionError` when the class is defined, naming the
 field. Columns are matched by field name; aliases are not used.
 
+### `NaN` is stored as `None`
+
+pandas hands empty cells over as `NaN` (an Excel sheet with blanks, for
+instance). A `NaN` given to a field that admits `None` (`T | None`) is stored as
+`None`, so you do not need a validator of your own:
+
+```python
+class Customer(Model):
+    id: int
+    email: str | None = None
+    score: float | None = None
+
+
+Customer(id=1, email=float("nan"), score=float("nan"))
+# Customer(id=1, email=None, score=None)
+```
+
+A field that does not admit `None` is never changed: a `NaN` in a plain `float`
+is a valid value and is kept. To keep the `NaN` in the nullable fields too, set
+`nan_as_none = False` on the model (it is inherited by subclasses). DataFrames
+are not affected: they keep Polars semantics, where empty cells are nulls and a real `NaN`
+in a `float` column is a valid value that `all()` keeps. Reading with `all(as_models=True)`
+builds instances, so there a `NaN` in a `T | None` field does become `None`.
+
 ### Types a file format cannot hold
 
 Having a Polars type does not mean every file format can store it. `time` and
