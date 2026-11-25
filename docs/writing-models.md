@@ -1,7 +1,8 @@
 # Writing with a model
 
 Save a DataFrame or a list of model instances through `Model.objects.save`. The
-mode is chosen on every call (there is no default) and the data is validated
+mode is chosen on every call (there is no default; the `instance.save()`
+shortcut, [below](#saving-one-instance), is the exception) and the data is validated
 against the model before anything is written. It is the counterpart of
 [Querying models](querying-models.md). To write through a catalog entry
 instead, see [Writing with a catalog](writing-catalog.md).
@@ -51,6 +52,31 @@ merge by name   [(1, 'ada', 'Madrid'), (2, 'linus', 'Helsinki'), (4, 'alan', 'Lo
 
 The last line matched on `name`, so `grace` was **updated** (her id changed from 3
 to 9) instead of inserted again.
+
+## Saving one instance
+
+An instance can save itself:
+
+```python
+Customer(id=1, name="ada").save()                        # merge by Meta.merge_keys
+Customer(id=1, name="ada").save(merge_keys=["name"])     # keys of the call
+Customer(id=1, name="ada").save(mode="overwrite")        # explicit: replaces the dataset
+```
+
+`instance.save()` is `type(instance).objects.save(instance, mode="merge")`: the
+row is inserted if its key is new and updates the stored row otherwise. It is
+the only place where the mode has a default, and it is `merge`.
+
+* Only Delta tables can merge. On CSV, Parquet or Excel the default mode raises
+  `ModelUnsupportedWriteModeError` and nothing is written; to replace the file
+  with that one row, ask for `mode="overwrite"` explicitly.
+* A model with no `Meta.merge_keys` (and no `merge_keys=`) raises
+  `ModelQueryError`.
+* Every column is written: a field left at its default overwrites the stored
+  value.
+* Each call is one write (one Delta commit). To save many rows use
+  `Customer.objects.save([...], mode=...)`.
+* `save` is a reserved name: a model cannot have a field called `save`.
 
 ## Updating rows
 

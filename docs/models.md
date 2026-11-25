@@ -216,7 +216,8 @@ Customer.objects.save(Customer(...), mode=ModelWriteMode.APPEND)
 
 `save` takes a DataFrame, an instance of the model or a list of instances (a
 `LazyFrame` must be collected first). **The mode is required and has no
-default**, because it decides what happens to the data that is already there:
+default** (except in `instance.save()`, see
+[Saving one instance](writing-models.md#saving-one-instance)), because it decides what happens to the data that is already there:
 
 | `ModelWriteMode` | Effect | Supported by |
 |------------------|--------|--------------|
