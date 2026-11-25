@@ -428,7 +428,7 @@ class ModelManager(Generic[M]):
         return self._model
 
     def __set_name__(self, owner: type, name: str) -> None:
-        """Check, when declared, that the manager is typed for this model."""
+        """Check that the manager is named `objects` and typed for this model."""
         if name != "objects":
             msg = (
                 f"A manager must be declared as 'objects', not '{name}' "
@@ -561,6 +561,7 @@ class ModelManager(Generic[M]):
 
         Raises:
             ValueError: If `mode` is not a :class:`ModelWriteMode`.
+            ModelNotRegisteredError: If the model is not registered.
             ModelQueryError: If `merge_keys` is given with a mode other than
                 ``merge``, if ``merge`` has no keys (neither in the call nor in
                 ``Meta``) or a key is not a field of the model.

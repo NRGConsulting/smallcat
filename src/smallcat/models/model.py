@@ -170,7 +170,11 @@ class Model(BaseModel):
                 By default ``Meta.merge_keys``.
 
         Raises:
-            ModelQueryError: If there are no merge keys.
+            ValueError: If `mode` is not a :class:`ModelWriteMode`.
+            ModelNotRegisteredError: If the model is not registered.
+            ModelQueryError: If ``merge`` has no keys (neither in the call nor in
+                ``Meta``), a key is not a field of the model, or `merge_keys`
+                is given with a mode other than ``merge``.
             ModelWriteNotAllowedError: If the model does not allow the mode.
             ModelUnsupportedWriteModeError: If the file format cannot write
                 with the mode (``merge`` on CSV, Parquet or Excel).

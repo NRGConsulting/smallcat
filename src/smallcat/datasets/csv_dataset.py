@@ -88,8 +88,9 @@ class CSVSaveOptions(BaseModel):
         header: Whether to write a header row with column names.
         sep: Field separator to use when writing (e.g. ',', '|', '\t').
         overwrite: If True, allow overwriting existing files at the
-            destination. Compression is *inferred from the file extension*
-            ('.gz', '.zst', …).
+            destination.
+
+    Compression is *inferred from the file extension* ('.gz', '.zst', …).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -143,9 +144,8 @@ class CSVDataset(BaseDataset[CSVLoadOptions, CSVSaveOptions]):
         """Write a PyArrow Table to CSV.
 
         Args:
-            path: Destination path (file or pattern) relative to the
-                connection base. Compression is inferred from the extension
-                (e.g. '.gz', '.zst').
+            path: Destination file path relative to the connection base.
+                Compression is inferred from the extension (e.g. '.gz', '.zst').
             table: The Arrow table to write.
 
         Raises:

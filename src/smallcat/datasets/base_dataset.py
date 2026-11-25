@@ -170,7 +170,7 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
       conn: The resolved connection implementing `ConnectionProtocol`.
       extras: Parsed `extra_dejson` from the connection.
       base_uri: Base URI inferred from the connection extras (e.g., `file://...`,
-        `gs://bucket/prefix`). May be `None` for unknown types.
+        `gs://bucket/prefix`). `None` when no base can be determined.
       load_options: Instance of `L` with load-time options, if any.
       save_options: Instance of `S` with save-time options, if any.
     """
@@ -230,6 +230,9 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
 
         Returns:
           A fully constructed `BaseDataset` subclass instance.
+
+        Raises:
+          RuntimeError: If Airflow is not installed.
         """
         base_hook = get_base_hook()
         if base_hook is None:
@@ -883,8 +886,9 @@ class BaseDataset[L: BaseModel, S: BaseModel](ABC):
         DuckDB authenticates ``gs://`` paths through the S3-compatible API,
         which only accepts **HMAC keys**: `login` is used as the key ID and
         `password` as the secret. Service account credentials (`keyfile_dict`,
-        `keyfile`, `key_path` in `extras`) are understood by delta-rs only, so
-        they cannot authenticate CSV, Parquet or Excel datasets. If they are
+        `keyfile`, `key_path` in `extras`) are understood by delta-rs and Polars
+        only, so they cannot authenticate CSV, Parquet or Excel datasets
+        read through DuckDB. If they are
         present without HMAC keys, a warning is emitted instead of silently
         reading anonymously.
 

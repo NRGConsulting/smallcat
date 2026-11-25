@@ -207,6 +207,7 @@ class Connections:
             The validated connections.
 
         Raises:
+            TypeError: If `conn_ids` is a single string instead of an iterable.
             ImportError: If Airflow is not installed.
             ConnectionNotFoundError: If an id does not exist in Airflow.
             ConnectionsValidationError: If a connection has an unsupported
