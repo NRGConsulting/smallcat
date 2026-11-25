@@ -78,12 +78,12 @@ def get_variable_json(variable_id: str) -> Any:  # noqa: ANN401
         The decoded content of the Variable.
 
     Raises:
-        KeyError: If the Variable does not exist.
+        KeyError: If the Variable does not exist. Only the errors Airflow 3
+            raises for a missing Variable are turned into a ``KeyError``;
+            any other error is left as it is.
         ValueError: If the Variable is not valid JSON. The message names the
             Variable but never quotes its content, which may hold secrets.
         ImportError: If Airflow, or something it needs, cannot be imported.
-            Only the errors Airflow 3 raises for a missing Variable are turned
-            into a ``KeyError``; anything else is left as it is.
     """
     try:
         from airflow.sdk import Variable

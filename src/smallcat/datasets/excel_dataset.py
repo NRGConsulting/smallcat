@@ -56,7 +56,7 @@ class ExcelSaveOptions(BaseModel):
 
     Attributes:
       header: If True, include column headers in the output file.
-      sheet: Optional worksheet name to write into (created if missing).
+      sheet: Optional worksheet name to write; DuckDB uses ``Sheet1`` if omitted.
     """
 
     model_config = ConfigDict(extra="forbid")

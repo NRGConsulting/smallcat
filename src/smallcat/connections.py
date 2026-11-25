@@ -6,7 +6,7 @@ Airflow-compatible fields while still satisfying the protocol expected by the
 rest of the library.
 
 Smallcat can operate with or without Airflow installed. When Airflow is
-available, objects implementing the same attributes (e.g., `BaseConnection`)
+available, objects implementing the same attributes (e.g., Airflow's `Connection`)
 are compatible with :class:`ConnectionProtocol`.
 """
 
@@ -146,6 +146,10 @@ class ConnectionLike(ConnectionProtocol):
         Args:
             connection: Mapping with Airflow-like connection fields. See class
                 docstring for expected keys.
+
+        Raises:
+            KeyError: If `conn_type` is missing.
+            TypeError: If `extra` is not a dict, a string or `None`.
         """
         self.conn_type = connection["conn_type"]
         self.host = connection.get("host")
