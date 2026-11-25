@@ -3,6 +3,28 @@
 All notable changes to `smallcat-chonk` are listed here. The version is taken
 from the git tag (`vX.Y.Z`).
 
+## 0.6.6 - 2026-11-25
+
+### Added
+
+- A model instance saves itself with `instance.save()`. By default it merges the
+  row by `Meta.merge_keys` (inserted if its key is new, updated otherwise), so
+  `Customer(id=1, name="Ana").save()` needs no `objects.save(..., mode="merge")`.
+  It also takes `mode=` and `merge_keys=`. Only Delta tables can merge: on CSV,
+  Parquet or Excel the default raises `ModelUnsupportedWriteModeError` and
+  nothing is written; ask for `mode="overwrite"` to replace the file with that
+  row. Every column is written, so a field left at its default overwrites the
+  stored value. Each call is one write: to save many rows use
+  `Model.objects.save([...], mode=...)`.
+
+### Changed
+
+- `save` is now a reserved name on models: a field called `save` raises
+  `ModelDefinitionError` when the model is defined.
+- Docstrings corrected across the library: missing `Raises` sections added, S3
+  listed among the Delta backends, and the descriptions of `base_uri`, the GCS
+  secret and the CSV, Excel and Parquet options fixed.
+
 ## 0.6.5 - 2026-11-24
 
 ### Added
