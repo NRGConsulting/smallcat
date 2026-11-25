@@ -3,7 +3,8 @@
 A :class:`Model` declares the columns of a dataset and, in `Meta`, where and how
 it is stored. A :class:`ModelRegistry` binds models to connections that were
 loaded beforehand, and `Model.objects` reads and writes Polars DataFrames
-validated against the model.
+validated against the model. An instance saves itself with `instance.save()`
+(a merge by default, so only Delta tables).
 
 Example:
   >>> class Customer(Model):
@@ -17,6 +18,7 @@ Example:
   >>> registry.register(Customer, connection="datalake_gcs")
   >>> Customer.objects.filter(pl.col("id") > 10).all()
   >>> Customer.objects.save(df, mode=ModelWriteMode.OVERWRITE)
+  >>> Customer(id=1, name="Ana").save()  # merge by Meta.merge_keys (Delta)
 """
 
 from smallcat.models.enums import ModelFileFormat, ModelValidationMode, ModelWriteMode
