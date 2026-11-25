@@ -296,3 +296,63 @@ def test_update_columns_in_meta_of_a_file_format_that_cannot_merge_are_refused()
             location="x.parquet",
             save_options={"update_columns": ["id"]},
         )
+
+
+# --- Model.save() (instance) ---
+
+
+def test_instance_save_merges_by_default(registry):
+    Customer(id=1, name="a", email="a@x").save()
+    Customer(id=1, name="renamed", email="a@x").save()
+    Customer(id=2, name="b", email="b@x").save()
+    out = Customer.objects.all().sort("id")
+    assert out["id"].to_list() == [1, 2]
+    assert out["name"].to_list() == ["renamed", "b"]
+
+
+def test_instance_save_accepts_keys_of_the_call(registry):
+    NoKeys(id=1, name="a").save(merge_keys=["id"])
+    NoKeys(id=1, name="b").save(merge_keys=["id"])
+    out = NoKeys.objects.all()
+    assert out.height == 1
+    assert out["name"].to_list() == ["b"]
+
+
+def test_instance_save_without_keys_fails(registry):
+    with pytest.raises(ModelQueryError, match="no merge keys"):
+        NoKeys(id=1, name="a").save()
+
+
+def test_instance_save_on_a_format_that_cannot_merge_is_an_error(registry, base):
+    with pytest.raises(ModelUnsupportedWriteModeError):
+        ParquetCustomer(id=1, name="a").save()
+    assert not (base / "customers.parquet").exists()
+
+
+def test_instance_save_can_overwrite_explicitly(registry):
+    ParquetCustomer(id=1, name="a").save(mode="overwrite")
+    ParquetCustomer(id=2, name="b").save(mode="overwrite")
+    assert ParquetCustomer.objects.all()["id"].to_list() == [2]
+
+
+def test_instance_save_respects_allowed_write_modes(registry):
+    class ReadOnly(Model):
+        id: int
+
+        class Meta:
+            location = "silver/ro"
+            file_format = "delta_table"
+            merge_keys = ["id"]
+            allowed_write_modes = ["overwrite"]
+
+    registry.register(ReadOnly, connection="local")
+    with pytest.raises(ModelWriteNotAllowedError):
+        ReadOnly(id=1).save()
+
+
+def test_a_field_called_save_is_rejected():
+    with pytest.raises(ModelDefinitionError, match="'save' is a reserved name"):
+
+        class Bad(Model):
+            id: int
+            save: bool = False

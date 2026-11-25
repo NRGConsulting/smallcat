@@ -50,7 +50,7 @@ class EntryBase(BaseModel, ABC):
     Attributes:
         connection: Airflow connection ID (string) **or** an inline connection
             mapping. A mapping is validated against the schema chosen by its
-            `conn_type` (`fs`, `google_cloud_platform`), so unknown types and
+            `conn_type` (`fs`, `google_cloud_platform`, `aws`), so unknown types and
             unknown keys are rejected.
     """
 
@@ -99,6 +99,11 @@ class EntryBase(BaseModel, ABC):
         Returns:
             dict | ConnectionProtocol: A resolved connection object or dictionary
             usable by datasets.
+
+        Raises:
+            ConnectionNotLoadedError: If bound connections do not hold the name.
+            ImportError: If the name must be resolved through Airflow and
+                Airflow is not installed.
         """
         if isinstance(self.connection, str):
             if self._connections is not None:
@@ -198,7 +203,7 @@ class EntryBase(BaseModel, ABC):
         """Load this entry's dataset as an Apache Arrow Table.
 
         This method builds the concrete dataset via :meth:`build_dataset` and
-        delegates to its `load_arrow_table`` method using this entry's `location`.
+        delegates to its `load_arrow_table` method using this entry's `location`.
         Any dataset-specific load options configured on the entry are respected.
 
         Args:

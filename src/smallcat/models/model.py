@@ -13,8 +13,10 @@ whose `Meta` says where that dataset lives and how it is stored:
             file_format = "parquet"
 
 Reading and writing go through `Customer.objects`; see
-:mod:`smallcat.models.query`. Which connection a model uses is decided when it
-is registered (see :mod:`smallcat.models.registry`), not here.
+:mod:`smallcat.models.query`. An instance writes itself with `.save()` (a merge
+by `Meta.merge_keys` by default, so Delta only). Which connection a model uses
+is decided when it is registered (see :mod:`smallcat.models.registry`), not
+here.
 
 Field values are validated by Pydantic whenever an instance is built. DataFrames
 are validated for columns, types and nulls only (see
@@ -29,10 +31,12 @@ to keep the `NaN`. A field that does not admit `None` is never changed.
 import math
 import types
 import typing
+from collections.abc import Sequence
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, model_validator
 
+from smallcat.models.enums import ModelWriteMode
 from smallcat.models.errors import ModelDefinitionError
 from smallcat.models.formats import unsupported_fields
 from smallcat.models.meta import ModelMeta, parse_meta
@@ -112,6 +116,13 @@ class Model(BaseModel):
                 f"CustomerManager()), got {type(declared).__name__}"
             )
             raise ModelDefinitionError(msg)
+        if "save" in cls.model_fields:
+            msg = (
+                f"'save' is a reserved name on models: {cls.__name__} cannot "
+                "have a field called 'save' (it is the method that writes the "
+                "instance)"
+            )
+            raise ModelDefinitionError(msg)
         meta_class = getattr(cls, "Meta", None)
         if meta_class is None:
             return
@@ -130,6 +141,46 @@ class Model(BaseModel):
             raise ModelDefinitionError(msg)
         cls.__smallcat_meta__ = meta
         cls.__smallcat_schema__ = schema
+
+    def save(
+        self,
+        *,
+        mode: ModelWriteMode | str = ModelWriteMode.MERGE,
+        merge_keys: Sequence[str] | None = None,
+    ) -> None:
+        """Validate this instance and write it as one row.
+
+        Shortcut for ``type(self).objects.save(self, mode=..., merge_keys=...)``.
+        By default it merges: the row is inserted if its key is new and updates
+        the row with the same key otherwise, by ``Meta.merge_keys`` (or
+        ``merge_keys``). Every column is written, so a field left at its default
+        overwrites the stored value.
+
+        Only Delta tables can merge: on any other format the default mode
+        raises :class:`ModelUnsupportedWriteModeError` and nothing is written.
+        Pass ``mode="overwrite"`` explicitly to replace the whole dataset with
+        this row.
+
+        Each call is one write (one Delta commit). To save many rows use
+        ``Model.objects.save([...], mode=...)``.
+
+        Args:
+            mode: A :class:`ModelWriteMode` or its value. Default ``merge``.
+            merge_keys: Fields that identify the row, with ``mode="merge"``.
+                By default ``Meta.merge_keys``.
+
+        Raises:
+            ValueError: If `mode` is not a :class:`ModelWriteMode`.
+            ModelNotRegisteredError: If the model is not registered.
+            ModelQueryError: If ``merge`` has no keys (neither in the call nor in
+                ``Meta``), a key is not a field of the model, or `merge_keys`
+                is given with a mode other than ``merge``.
+            ModelWriteNotAllowedError: If the model does not allow the mode.
+            ModelUnsupportedWriteModeError: If the file format cannot write
+                with the mode (``merge`` on CSV, Parquet or Excel).
+            ModelSchemaValidationError: If the row does not match the model.
+        """
+        type(self).objects.save(self, mode=mode, merge_keys=merge_keys)
 
     @model_validator(mode="before")
     @classmethod

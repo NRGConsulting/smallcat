@@ -16,7 +16,8 @@ Example:
   >>> ds.save_arrow_table("silver/events/", tbl)
 
 Related options:
-  * `ParquetLoadOptions`: binary_as_string, hive_partitioning, union_by_name...
+  * `ParquetLoadOptions`: binary_as_string, file_row_number, hive_partitioning,
+    union_by_name.
   * `ParquetSaveOptions`: overwrite, partition_by, write_partition_columns.
 """
 
@@ -69,8 +70,8 @@ class ParquetDataset(BaseDataset[ParquetLoadOptions, ParquetSaveOptions]):
     table.
 
     Notes:
-      * You can pass a single file, a directory (e.g., `/path/**.parquet`),
-        or any glob DuckDB understands.
+      * You can pass a single file, a directory (e.g., `events/`), or any glob
+        DuckDB understands (e.g., `events/**/*.parquet`).
     """
 
     def load_arrow_record_batch_reader(

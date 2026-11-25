@@ -8,6 +8,8 @@ Storage backends:
   * Local filesystem (`fs`) - no extra options.
   * Google Cloud Storage (`google_cloud_platform`) - credentials derived from
     connection extras: `keyfile_dict` / `keyfile` / `key_path`.
+  * AWS S3 (`aws` / `s3`) - static keys, or the AWS credential chain (IAM roles,
+    profiles) when the connection has none.
   * Databricks - not supported; raises ``NotImplementedError``.
 
 Example:
@@ -168,7 +170,8 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
 
     Notes:
       * For Google Cloud Storage, credentials are derived from the connection's
-        extras (e.g., `keyfile_dict`, `keyfile`, or `key_path`).
+        extras (e.g., `keyfile_dict`, `keyfile`, or `key_path`); for S3, from
+        its keys or the AWS credential chain.
       * `conn_type == "databricks"` is not supported and raises
         ``NotImplementedError`` on both read and write.
     """
@@ -219,7 +222,11 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
         where: str | None = None,
         columns: list[str] | None = None,
     ) -> pa.RecordBatchReader:
-        """Stream Delta Lake rows via DuckDB with an optional filter."""
+        """Stream Delta Lake rows via DuckDB with an optional filter.
+
+        Raises:
+          NotImplementedError: If the connection type is ``databricks``.
+        """
         full_uri = self._full_uri(path)
         if self._conn_type is ConnType.DATABRICKS:
             raise NotImplementedError(DATABRICKS_UNSUPPORTED_MSG)
@@ -301,8 +308,9 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
 
         Raises:
           NotImplementedError: If the connection type is ``databricks``.
-          ValueError: In merge mode, if the keys or columns are invalid or the
-            keys are null or duplicated in `table`.
+          ValueError: If ``merge_keys`` / ``update_columns`` are set without
+            ``mode: merge``; in merge mode, if the keys or columns are invalid
+            or the keys are null or duplicated in `table`.
         """
         if self._conn_type is ConnType.DATABRICKS:
             raise NotImplementedError(DATABRICKS_UNSUPPORTED_MSG)
@@ -427,8 +435,8 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
 
         Raises:
           NotImplementedError: For Databricks connections.
-          ValueError: If the predicate is empty or unsafe, `values` is empty or
-            a column does not exist.
+          ValueError: If the predicate is empty or unsafe, `values` is empty, a
+            column does not exist or a float value is NaN or infinite.
           TypeError: If a value has an unsupported type.
         """
         if self._conn_type is ConnType.DATABRICKS:
