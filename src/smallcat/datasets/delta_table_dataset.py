@@ -39,8 +39,10 @@ from datetime import date, datetime
 from enum import StrEnum
 from typing import Any
 
+import duckdb
 import polars as pl
 import pyarrow as pa
+import pyarrow.dataset as pads
 from deltalake import DeltaTable, write_deltalake
 from deltalake.exceptions import TableNotFoundError
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -61,6 +63,23 @@ DATABRICKS_UNSUPPORTED_MSG = (
 # newer ones removed it. Decide once, up front, instead of retrying a failed
 # write (which could duplicate data with `mode="append"`).
 _WRITE_DELTALAKE_HAS_ENGINE = "engine" in inspect.signature(write_deltalake).parameters
+
+
+def _is_view_type_mismatch(exc: Exception) -> bool:
+    """Return whether `exc` is pyarrow refusing to mix ``string`` and ``*_view``."""
+    msg = str(exc)
+    return "no kernel matching input types" in msg and "_view" in msg
+
+
+def _cast_reader(dataset: pads.Dataset) -> pa.RecordBatchReader:
+    """Stream `dataset` with every batch cast to the dataset schema.
+
+    Turns the ``string_view`` / ``binary_view`` columns of the files into the
+    ``string`` / ``binary`` types the Delta schema declares.
+    """
+    schema = dataset.schema
+    batches = (batch.cast(schema) for batch in dataset.scanner().to_batches())
+    return pa.RecordBatchReader.from_batches(schema, batches)
 
 
 class DeltaTableLoadOptions(BaseModel):
@@ -241,6 +260,17 @@ class DeltaTableDataset(BaseDataset[DeltaTableLoadOptions, DeltaTableSaveOptions
         dataset = dt.to_pyarrow_dataset()
         with self._duckdb_conn() as con:
             con.register("data", dataset)
+            try:
+                return to_record_batch_reader(con.sql(query))
+            except duckdb.InvalidInputException as exc:
+                if where is None or not _is_view_type_mismatch(exc):
+                    raise
+            # The files hold ``string_view`` columns while the dataset schema
+            # says ``string``: pyarrow cannot evaluate the filter DuckDB pushes
+            # down. Stream the data cast to the dataset schema and let DuckDB
+            # filter it (no pushdown).
+            con.unregister("data")
+            con.register("data", _cast_reader(dataset))
             return to_record_batch_reader(con.sql(query))
 
     def exists(self, path: str) -> bool:
