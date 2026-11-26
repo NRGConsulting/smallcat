@@ -243,3 +243,127 @@ def test_count_ignores_select():
 
 def test_count_returns_an_int():
     assert type(QParquet.objects.count()) is int
+
+
+# ---------- order_by ----------
+
+
+def test_order_by_ascending_and_descending(model):
+    assert model.objects.order_by("-id").all()["id"].to_list() == [4, 3, 2, 1]
+    assert model.objects.order_by("name").all()["name"].to_list() == list("abcd")
+
+
+def test_order_by_nulls_last_ascending_first_descending(model):
+    asc = model.objects.order_by("score").all()["id"].to_list()
+    desc = model.objects.order_by("-score").all()["id"].to_list()
+    assert asc == [1, 3, 4, 2]
+    assert desc == [2, 4, 3, 1]
+
+
+def test_order_by_several_fields_and_ties():
+    frame = QParquet.objects.where(id__gt=0).order_by("-score", "id").all()
+    assert frame["id"].to_list() == [2, 4, 3, 1]
+
+
+def test_order_by_after_and_before_where(model):
+    a = model.objects.where(id__gt=1).order_by("-id").all()["id"].to_list()
+    b = model.objects.order_by("-id").where(id__gt=1).all()["id"].to_list()
+    assert a == b == [4, 3, 2]
+
+
+def test_order_by_with_exclude_and_models(model):
+    rows = model.objects.exclude(id=2).order_by("-id").all(as_models=True)
+    assert [m.id for m in rows] == [4, 3, 1]
+
+
+def test_order_by_with_polars_filter():
+    query = QParquet.objects.filter(pl.col("id") > 1).order_by("-id")
+    assert query.all()["id"].to_list() == [4, 3, 2]
+    assert query.lazy().collect()["id"].to_list() == [4, 3, 2]
+
+
+def test_order_by_with_select_by_a_field_not_selected(model):
+    frame = model.objects.select("name").order_by("-id").all()
+    assert frame.columns == ["name"]
+    assert frame["name"].to_list() == ["d", "c", "b", "a"]
+    sql = model.objects.where(id__gt=0).select("name").order_by("-id").all()
+    assert sql.columns == ["name"]
+    assert sql["name"].to_list() == ["d", "c", "b", "a"]
+
+
+def test_order_by_keeps_the_select_column_order():
+    frame = QParquet.objects.select("name", "id").order_by("-id").all()
+    assert frame.columns == QParquet.objects.select("name", "id").all().columns == ["name", "id"]
+
+
+def test_order_by_first_and_last(model):
+    assert model.objects.order_by("-id").first(as_models=True).id == 4
+    assert model.objects.order_by("-id").last(as_models=True).id == 1
+    query = model.objects.where(id__lt=4).order_by("-score")
+    assert query.first(as_models=True).id == 2
+    assert query.last(as_models=True).id == 1
+
+
+def test_order_by_first_with_polars_filter():
+    query = QParquet.objects.filter(pl.col("id") < 4).order_by("-id")
+    assert query.first()["id"].to_list() == [3]
+    assert query.last()["id"].to_list() == [1]
+
+
+def test_order_by_does_not_change_count(model):
+    assert model.objects.order_by("-id").count() == 4
+    assert model.objects.where(id__gt=1).order_by("-id").count() == 3
+
+
+def test_order_by_sorts_after_casting_in_coerce_mode(tmp_path):
+    class Coerced(Model):
+        id: int
+
+        class Meta:
+            location = "coerced.csv"
+            file_format = "csv"
+            validation_mode = "coerce"
+            load_options = {"all_varchar": True}
+
+    reg = ModelRegistry()
+    reg.load_connections(
+        Connections.from_dict(
+            {
+                "connections": {
+                    "local": {"conn_type": "fs", "extra": {"base_path": str(tmp_path)}},
+                },
+            },
+        ),
+    )
+    reg.register(Coerced, connection="local")
+    (tmp_path / "coerced.csv").write_text("id\n9\n10\n2\n")
+    with use_registry(reg):
+        assert Coerced.objects.order_by("id").all()["id"].to_list() == [2, 9, 10]
+        sql = Coerced.objects.where("id <> '0'").order_by("-id").all()
+        assert sql["id"].to_list() == [10, 9, 2]
+
+
+def test_order_by_does_not_change_the_original_query():
+    base = QParquet.objects.where(id__gt=1)
+    base.order_by("id")
+    assert base.ordering is None
+
+
+def test_order_by_requires_a_field():
+    with pytest.raises(ModelQueryError, match="at least one"):
+        QParquet.objects.order_by()
+
+
+def test_order_by_rejects_an_unknown_field_and_suggests():
+    with pytest.raises(ModelQueryError, match="did you mean 'name'"):
+        QParquet.objects.order_by("-nme")
+
+
+def test_order_by_rejects_a_repeated_field():
+    with pytest.raises(ModelQueryError, match="repeated"):
+        QParquet.objects.order_by("id", "-id")
+
+
+def test_order_by_can_only_be_used_once():
+    with pytest.raises(ModelQueryError, match="already used"):
+        QParquet.objects.order_by("id").order_by("name")

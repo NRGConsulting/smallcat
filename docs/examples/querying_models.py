@@ -176,6 +176,66 @@ print(query.select("id", "customer").all())
 print([order.customer for order in query.all(as_models=True)])
 print(query.lazy().collect().height, "row")
 
+# 9b. exclude(): the opposite of where() ---
+title("exclude(): drops the rows that match, with the same arguments as where()")
+print("country=US          :", ids(Order.objects.exclude(country="US")))
+print("sql                 :", ids(Order.objects.exclude("amount > 100")))
+print("both conditions     :", ids(Order.objects.exclude(country="US", paid=True)))
+bigger = Order.objects.where(amount__gt=50)
+print("after where()       :", ids(bigger.exclude(status="new")))
+not_new = Order.objects.exclude(status="new")
+print("before where()      :", ids(not_new.where(amount__gt=50)))
+print("chained             :", ids(Order.objects.exclude(id=1).exclude(id=2)))
+print("a null is kept      :", ids(Order.objects.exclude(coupon="WELCOME")))
+us, not_us = Order.objects.where(country="US"), Order.objects.exclude(country="US")
+assert sorted(ids(us) + ids(not_us)) == [1, 2, 3, 4, 5, 6]
+
+# 9c. order_by() ---
+title("order_by(): a leading minus means descending")
+print("amount              :", Order.objects.order_by("amount").all()["id"].to_list())
+print("-amount             :", Order.objects.order_by("-amount").all()["id"].to_list())
+print(
+    "country, -amount    :",
+    Order.objects.order_by("country", "-amount").all()["id"].to_list(),
+)
+print(
+    "nulls last (asc)    :",
+    Order.objects.order_by("coupon", "id").all()["id"].to_list(),
+)
+print(
+    "nulls first (desc)  :",
+    Order.objects.order_by("-coupon", "id").all()["id"].to_list(),
+)
+print(
+    "with where()        :",
+    Order.objects.where(country__in=["ES", "US"])
+    .order_by("-amount")
+    .all()["id"]
+    .to_list(),
+)
+print(
+    "with filter()       :",
+    Order.objects.filter(pl.col("paid")).order_by("-amount").lazy().collect()["id"].to_list(),
+)
+print(
+    "select + sort by an unselected field:",
+    Order.objects.select("customer").order_by("-amount").all()["customer"].to_list(),
+)
+
+# 9d. first(), last() and count() ---
+title("first(), last() and count()")
+print(Order.objects.select("id", "customer", "amount").order_by("-amount").first())
+print("first, as a model   :", Order.objects.order_by("-amount").first(as_models=True))
+print("last, as a model    :", Order.objects.order_by("-amount").last(as_models=True))
+print(
+    "last paid order     :",
+    Order.objects.where(paid=True).order_by("placed_at").last(as_models=True).id,
+)
+print("no match            :", Order.objects.where(amount__gt=5000).first())
+print("count               :", Order.objects.count())
+print("count where         :", Order.objects.where(country="US").count())
+print("count exclude       :", Order.objects.exclude(country="US").count())
+
 # 10. What is refused ------------------------------------------------------------------
 title("a lookup that does not fit the model fails where you write it")
 for build in (
@@ -198,6 +258,22 @@ for build in (
     lambda: Order.objects.where(id=1).where(country="ES"),
     lambda: Order.objects.filter(pl.col("id") > 1).where(country="ES"),
     lambda: Order.objects.where(),
+):
+    try:
+        build()
+    except ModelQueryError as error:
+        print(f"{type(error).__name__}: {error}")
+
+title("exclude() and order_by() are checked where you write them")
+for build in (
+    lambda: Order.objects.exclude(),
+    lambda: Order.objects.exclude(custmer="ada"),
+    lambda: Order.objects.filter(pl.col("id") > 1).exclude(country="ES"),
+    lambda: Order.objects.order_by(),
+    lambda: Order.objects.order_by("-amout"),
+    lambda: Order.objects.order_by("id", "-id"),
+    lambda: Order.objects.order_by("id").order_by("amount"),
+    lambda: Order.objects.select("id").first(as_models=True),
 ):
     try:
         build()

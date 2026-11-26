@@ -8,22 +8,23 @@
     Customer.objects.where("id > 10").all(as_models=True)
     Customer.objects.where(id__gt=10, country="ES").all()
     Customer.objects.where(country="ES").exclude(status="closed").count()
-    Customer.objects.where(country="ES").first(as_models=True)
+    Customer.objects.where(country="ES").order_by("-id").first(as_models=True)
 
 There are two ways to filter and they cannot be combined in one query:
 `filter()` takes Polars expressions and `where()` takes an SQL predicate
 (DuckDB), written by hand (`sql=`) or as Django-style lookups (`id__gt=10`).
 `exclude()` is the opposite of `where()` and belongs to the SQL way. `select()`
-combines with either.
+and `order_by()` combine with either.
 
 `first()` and `last()` return one row (or `None`) and `count()` the number of
-rows. Rows have no defined order beyond the one the dataset stores them in.
+rows. Without `order_by()`, rows come in the order the dataset stores them.
 """
 
 import copy
 import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from difflib import get_close_matches
 from enum import Enum
 from typing import (
     TYPE_CHECKING,
@@ -100,6 +101,8 @@ class ModelQuery[M: "Model"]:
         exclude_sql: SQL predicates (DuckDB) whose rows are dropped, one per
             `exclude()` call. Alternative to `filters`.
         columns: The columns to read, or `None` for all of them.
+        ordering: The fields to sort by (a leading `-` means descending), or
+            `None` for the order the dataset stores the rows in.
     """
 
     model: "type[M]"
@@ -107,6 +110,7 @@ class ModelQuery[M: "Model"]:
     where_sql: str | None = None
     exclude_sql: tuple[str, ...] = ()
     columns: tuple[str, ...] | None = None
+    ordering: tuple[str, ...] | None = None
 
     @property
     def _sql(self) -> str | None:
@@ -221,7 +225,12 @@ class ModelQuery[M: "Model"]:
             raise ModelQueryError(_MIXED)
         if lookups:
             spec: ModelSchema = self.model.__smallcat_schema__  # type: ignore[assignment]
-            rendered = lookups_to_sql(spec, lookups)
+            try:
+                rendered = lookups_to_sql(spec, lookups)
+            except ModelQueryError as error:
+                # The lookup messages are written for where(): name this call.
+                msg = str(error).replace("where()", "exclude()")
+                raise ModelQueryError(msg) from None
             sql = rendered if sql is None else f"({sql}) AND ({rendered})"
         return replace(self, exclude_sql=(*self.exclude_sql, str(sql)))
 
@@ -255,6 +264,75 @@ class ModelQuery[M: "Model"]:
             msg = "select(): a field is repeated"
             raise ModelQueryError(msg)
         return replace(self, columns=tuple(names))
+
+    def order_by(self, *fields: str) -> Self:
+        """Sort the rows by one or more fields.
+
+        Fields are sorted in the order given, each ascending, or descending when
+        written with a leading minus (``"-created_at"``), as in Django. Nulls go
+        last in ascending order and first in descending order. Rows that tie
+        keep the order the dataset stores them in. The order applies to
+        `all()`, `lazy()`, `first()` and `last()`, and can be set before or
+        after `where()`, `exclude()` or `filter()`. A field that is not in
+        `select()` can still be used to sort.
+
+        Args:
+            *fields: Field names, each optionally prefixed with `-`.
+
+        Returns:
+            A new query.
+
+        Raises:
+            ModelQueryError: If no field is given, a name is not a field of the
+                model, a field is repeated, or `order_by()` was already used.
+        """
+        if not fields:
+            msg = "order_by() needs at least one field name"
+            raise ModelQueryError(msg)
+        if self.ordering is not None:
+            msg = "order_by() was already used: put every field in one call"
+            raise ModelQueryError(msg)
+        names = [f.removeprefix("-") if isinstance(f, str) else f for f in fields]
+        known = list(self.model.model_fields)
+        unknown = [n for n in names if n not in known]
+        if unknown:
+            close = get_close_matches(str(unknown[0]), known, n=1)
+            hint = f"; did you mean '{close[0]}'?" if close else ""
+            msg = (
+                f"order_by(): {unknown} are not fields of {self.model.__name__}"
+                f"{hint} (fields: {known})"
+            )
+            raise ModelQueryError(msg)
+        if len(set(names)) != len(names):
+            msg = "order_by(): a field is repeated"
+            raise ModelQueryError(msg)
+        return replace(self, ordering=tuple(fields))
+
+    def _sort_args(self) -> tuple[list[str], list[bool]]:
+        """The sort columns and whether each one is descending."""
+        ordering = self.ordering or ()
+        return [f.removeprefix("-") for f in ordering], [
+            f.startswith("-") for f in ordering
+        ]
+
+    def _sorted[F: (pl.DataFrame, pl.LazyFrame)](self, frame: F) -> F:
+        """Sort a frame by the query's ordering (a no-op without one)."""
+        if self.ordering is None:
+            return frame
+        names, descending = self._sort_args()
+        return frame.sort(
+            names,
+            descending=descending,
+            nulls_last=[not d for d in descending],
+            maintain_order=True,
+        )
+
+    def _needed(self) -> list[str] | None:
+        """The columns to read: the selected ones plus those used to sort."""
+        if not self.columns:
+            return None
+        extra = [n for n in self._sort_args()[0] if n not in self.columns]
+        return [*self.columns, *dict.fromkeys(extra)]
 
     # ---------- Running ----------
 
@@ -321,7 +399,14 @@ class ModelQuery[M: "Model"]:
         selected = list(self.columns) if self.columns else None
         sql = self._sql
         if sql is not None:
-            df = ctx.entry.load_polars(where=sql, columns=selected)
+            needed = self._needed()
+            df = ctx.entry.load_polars(where=sql, columns=needed)
+            if self.ordering is not None:
+                # Validate (and cast) first, so that CSV text sorts as numbers.
+                df = self._sorted(validate_frame(df, ctx.spec, ctx.mode, needed))
+                if selected:
+                    df = df.select(selected)
+                return df if head is None else df.head(head)
             if head is not None:
                 df = df.head(head)
             return validate_frame(df, ctx.spec, ctx.mode, selected)
@@ -379,8 +464,9 @@ class ModelQuery[M: "Model"]:
     def first(self, *, as_models: bool = False) -> "pl.DataFrame | M | None":
         """Return the first row of the query, or `None` if there are none.
 
-        "First" is in the order the dataset stores the rows, which is not
-        guaranteed for Delta tables or for several files read together.
+        "First" follows `order_by()`. Without it, it is the order the dataset
+        stores the rows in, which is not guaranteed for Delta tables or for
+        several files read together.
 
         Args:
             as_models: If true, return an instance of the model instead of a
@@ -410,8 +496,8 @@ class ModelQuery[M: "Model"]:
     def last(self, *, as_models: bool = False) -> "pl.DataFrame | M | None":
         """Return the last row of the query, or `None` if there are none.
 
-        Like :meth:`first`, in the order the dataset stores the rows. The whole
-        result is read to find the last row.
+        Like :meth:`first`, it follows `order_by()` (without it, the storage
+        order). The whole result is read to find the last row.
 
         Args:
             as_models: If true, return an instance of the model instead of a
@@ -451,11 +537,13 @@ class ModelQuery[M: "Model"]:
         """Build the lazy plan and return it with the unfiltered scan."""
         selected = list(self.columns) if self.columns else None
         raw = ctx.entry.scan_polars()
-        prepared = prepare_lazy(raw, ctx.spec, ctx.mode, selected)
+        prepared = prepare_lazy(raw, ctx.spec, ctx.mode, self._needed())
         frame = prepared.frame
         if self.filters:
             frame = frame.filter(*self.filters)
-        return frame.select(prepared.select), raw
+        frame = self._sorted(frame)
+        keep = [c for c in prepared.select if selected is None or c in selected]
+        return frame.select(keep), raw
 
 
 def _plain(value: object) -> Any:  # noqa: ANN401
@@ -682,6 +770,10 @@ class ModelManager(Generic[M]):
     def count(self) -> int:
         """Count every row. See :meth:`ModelQuery.count`."""
         return self._query().count()
+
+    def order_by(self, *fields: str) -> ModelQuery[M]:
+        """Start a sorted query. See :meth:`ModelQuery.order_by`."""
+        return self._query().order_by(*fields)
 
     def select(self, *names: str) -> ModelQuery[M]:
         """Start a query on some fields. See :meth:`ModelQuery.select`."""
