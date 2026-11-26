@@ -41,7 +41,7 @@ query returns.
 
 ## One query, whichever way you filter
 
-`filter()`, `where()` and `select()` return a **query**. It is immutable (each
+`filter()`, `where()`, `exclude()` and `select()` return a **query**. It is immutable (each
 call returns a new one) and reads nothing until you run it:
 
 ```python
@@ -52,12 +52,14 @@ query.lazy()         # pl.LazyFrame
 query.all(as_models=True)   # list[Order], validated by Pydantic
 query.as_models()    # the same, as a shortcut
 query.select("id", "customer").all()   # only some fields
+query.first()        # one row (or None)
+query.count()        # number of rows
 ```
 
 !!! note "`filter` and `where` are alternatives"
     They run on different engines, so one query uses **only one of them**.
     Combining them, in either order, raises `ModelQueryError` where you write
-    it. `select()` goes with either.
+    it. `exclude()` belongs with `where()`. `select()` goes with either.
 
 ## The methods
 
@@ -68,6 +70,10 @@ query.select("id", "customer").all()   # only some fields
 | `as_models()` | `list[Order]` | Shortcut for `all(as_models=True)`. Each row is validated by Pydantic, so field constraints apply. Cannot be combined with `select()`. |
 | `filter(*exprs)` | query | Polars expressions; several calls are combined with AND. |
 | `where(sql=None, **lookups)` | query | An SQL predicate (DuckDB) and/or Django-style lookups such as `id__gte=10`. Usable once per query. |
+| `exclude(sql=None, **lookups)` | query | The opposite of `where()`: drops the rows that match. Can be repeated and goes before or after `where()`. See [`exclude`](#exclude). |
+| `first(as_models=False)` | `pl.DataFrame \| Order \| None` | The first row, as a one-row DataFrame or an instance; `None` if there are none. See [First, last and count](#first-last-and-count). |
+| `last(as_models=False)` | `pl.DataFrame \| Order \| None` | The last row, like `first()`. |
+| `count()` | `int` | How many rows match. |
 | `select(*fields)` | query | Only some fields; names must be fields of the model. |
 | `create_table()` | `bool` | Creates the dataset empty, with the model's schema, if it does not exist. See [Creating the table](#creating-the-table). |
 
@@ -235,6 +241,46 @@ Order.objects.where(sql="country = 'FI' OR amount > 500", paid=True)   # [3]
 
 This is how you write what lookups do not cover (`OR`, `NOT`, functions) and
 still keep the simple conditions validated.
+
+## `exclude`
+
+`exclude()` is the opposite of `where()`: it takes the same arguments (an SQL
+predicate and/or lookups) and drops the rows that match.
+
+```python
+Order.objects.exclude(country="US")              # [1, 2, 4, 5]
+Order.objects.exclude("amount > 100")            # [2, 4, 6]
+Order.objects.exclude(country="US", paid=True)   # drops only rows that are both
+Order.objects.where(amount__gt=50).exclude(status="new")
+```
+
+- Several conditions in one call drop only the rows that satisfy **all** of
+  them (`exclude(a=1, b=2)` drops `a=1 AND b=2`), as in Django.
+- It can be called several times, before or after `where()`: each call drops
+  its own rows. Unlike `where()`, it is not limited to one use.
+- A row whose condition is unknown because of a null is **kept**:
+  `exclude(coupon="X")` keeps the rows with no coupon.
+- It takes SQL and lookups only, like `where()`, so it cannot be combined with
+  `filter()` (`ModelQueryError`).
+
+## First, last and count
+
+```python
+Order.objects.first()                         # one-row DataFrame, or None
+Order.objects.where(country="ES").last(as_models=True)   # Order, or None
+Order.objects.exclude(status="new").count()   # int
+```
+
+- `first()` and `last()` return `None` when no row matches. With
+  `as_models=True` they return an instance (validated by Pydantic), which
+  cannot be combined with `select()`.
+- "First" and "last" follow the order in which the dataset stores the rows.
+  Delta tables and several files read together do not guarantee one, and there
+  is no `order_by()`. `last()` reads the whole result to find the last row.
+- `count()` checks the schema but does not validate the data (nulls in
+  required fields, values that cannot be cast), like `lazy()`. `select()` does
+  not change it.
+- All of them are also available on `Order.objects`.
 
 ## The same rows, three ways
 

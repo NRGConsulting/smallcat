@@ -7,11 +7,17 @@
     Customer.objects.filter(pl.col("id") > 10).lazy().group_by("name").len()
     Customer.objects.where("id > 10").all(as_models=True)
     Customer.objects.where(id__gt=10, country="ES").all()
+    Customer.objects.where(country="ES").exclude(status="closed").count()
+    Customer.objects.where(country="ES").first(as_models=True)
 
 There are two ways to filter and they cannot be combined in one query:
 `filter()` takes Polars expressions and `where()` takes an SQL predicate
 (DuckDB), written by hand (`sql=`) or as Django-style lookups (`id__gt=10`).
-`select()` combines with either.
+`exclude()` is the opposite of `where()` and belongs to the SQL way. `select()`
+combines with either.
+
+`first()` and `last()` return one row (or `None`) and `count()` the number of
+rows. Rows have no defined order beyond the one the dataset stores them in.
 """
 
 import copy
@@ -91,13 +97,23 @@ class ModelQuery[M: "Model"]:
         model: The model class.
         filters: Polars predicates, combined with AND.
         where_sql: An SQL predicate (DuckDB), alternative to `filters`.
+        exclude_sql: SQL predicates (DuckDB) whose rows are dropped, one per
+            `exclude()` call. Alternative to `filters`.
         columns: The columns to read, or `None` for all of them.
     """
 
     model: "type[M]"
     filters: tuple[pl.Expr, ...] = ()
     where_sql: str | None = None
+    exclude_sql: tuple[str, ...] = ()
     columns: tuple[str, ...] | None = None
+
+    @property
+    def _sql(self) -> str | None:
+        """The SQL predicate of `where()` and `exclude()` together, if any."""
+        parts = [f"({self.where_sql})"] if self.where_sql is not None else []
+        parts += [f"NOT COALESCE(({e}), FALSE)" for e in self.exclude_sql]
+        return " AND ".join(parts) if parts else None
 
     # ---------- Building ----------
 
@@ -112,7 +128,8 @@ class ModelQuery[M: "Model"]:
 
         Raises:
             ModelQueryError: If no predicate is given, one is not a Polars
-                expression, or the query already uses `where()`.
+                expression, or the query already uses `where()` or
+                `exclude()`.
         """
         if not predicates:
             msg = "filter() needs at least one Polars expression"
@@ -124,7 +141,7 @@ class ModelQuery[M: "Model"]:
                     f"not {type(predicate).__name__}; use where() for an SQL string"
                 )
                 raise ModelQueryError(msg)
-        if self.where_sql is not None:
+        if self._sql is not None:
             raise ModelQueryError(_MIXED)
         return replace(self, filters=(*self.filters, *predicates))
 
@@ -172,6 +189,42 @@ class ModelQuery[M: "Model"]:
         combined = rendered if sql is None else f"({sql}) AND ({rendered})"
         return replace(self, where_sql=combined)
 
+    def exclude(self, sql: str | None = None, **lookups: Any) -> Self:  # noqa: ANN401
+        """Drop the rows that satisfy an SQL predicate and/or lookups.
+
+        The opposite of :meth:`where`, with the same arguments. When several
+        conditions are given in one call, only the rows that satisfy *all* of
+        them are dropped (``exclude(a=1, b=2)`` drops the rows where ``a=1 AND
+        b=2``). Rows where the condition is unknown because of a null are kept.
+        It can be called several times, and before or after `where()`: every
+        call drops its own rows.
+
+        Args:
+            sql: An SQL predicate (DuckDB), e.g. `"id > 10 OR name = 'a'"`.
+            **lookups: The lookups, e.g. `status="closed", id__lt=3`.
+
+        Returns:
+            A new query.
+
+        Raises:
+            ModelQueryError: If there is neither an SQL predicate nor lookups,
+                the predicate is empty, a lookup is not valid for the model, or
+                the query already uses `filter()`.
+        """
+        if sql is None and not lookups:
+            msg = "exclude() takes an SQL predicate (sql='...') or lookups (id__gt=1)"
+            raise ModelQueryError(msg)
+        if sql is not None and (not isinstance(sql, str) or not sql.strip()):
+            msg = "exclude() takes a non-empty SQL predicate string"
+            raise ModelQueryError(msg)
+        if self.filters:
+            raise ModelQueryError(_MIXED)
+        if lookups:
+            spec: ModelSchema = self.model.__smallcat_schema__  # type: ignore[assignment]
+            rendered = lookups_to_sql(spec, lookups)
+            sql = rendered if sql is None else f"({sql}) AND ({rendered})"
+        return replace(self, exclude_sql=(*self.exclude_sql, str(sql)))
+
     def select(self, *names: str) -> Self:
         """Read only some of the model's fields.
 
@@ -210,7 +263,7 @@ class ModelQuery[M: "Model"]:
 
         Parquet and Delta are scanned natively, so filters and columns are
         pushed down to the storage. Other formats are read in full. A query
-        with `where()` runs its SQL now and wraps the result.
+        with `where()` or `exclude()` runs its SQL now and wraps the result.
 
         Only the schema (columns and types) is checked here, since no data has
         been read. Two checks need the data and are *not* made on a frame you
@@ -221,7 +274,7 @@ class ModelQuery[M: "Model"]:
         Returns:
             The LazyFrame, validated against the model's schema.
         """
-        if self.where_sql is not None:
+        if self._sql is not None:
             return self.all().lazy()
         return self._plan(_context(self.model))[0]
 
@@ -259,17 +312,23 @@ class ModelQuery[M: "Model"]:
         rows = self._frame().iter_rows(named=True)
         return [self.model.model_validate(row) for row in rows]
 
-    def _frame(self) -> pl.DataFrame:
-        """Run the query and return the validated DataFrame."""
+    def _frame(self, head: int | None = None) -> pl.DataFrame:
+        """Run the query and return the validated DataFrame.
+
+        With `head`, only that many first rows are kept (and, without SQL, read).
+        """
         ctx = _context(self.model)
         selected = list(self.columns) if self.columns else None
-        if self.where_sql is not None:
-            df = ctx.entry.load_polars(where=self.where_sql, columns=selected)
+        sql = self._sql
+        if sql is not None:
+            df = ctx.entry.load_polars(where=sql, columns=selected)
+            if head is not None:
+                df = df.head(head)
             return validate_frame(df, ctx.spec, ctx.mode, selected)
 
         plan, raw = self._plan(ctx)
         try:
-            df = plan.collect()
+            df = (plan if head is None else plan.head(head)).collect()
         except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
             if ctx.mode is ModelValidationMode.COERCE:
                 # Find out which column and how many values, from the raw data.
@@ -292,6 +351,101 @@ class ModelQuery[M: "Model"]:
                 need every required field.
         """
         return self.all(as_models=True)
+
+    def _one(
+        self, frame: pl.DataFrame, *, as_models: bool
+    ) -> "pl.DataFrame | M | None":
+        """Turn a frame of at most one row into what `first`/`last` return."""
+        if frame.is_empty():
+            return None
+        if not as_models:
+            return frame
+        return self.model.model_validate(frame.row(0, named=True))
+
+    def _check_models(self, *, as_models: bool) -> None:
+        if as_models and self.columns is not None:
+            msg = "as_models needs every field: remove select()"
+            raise ModelQueryError(msg)
+
+    @overload
+    def first(self, *, as_models: Literal[False] = False) -> pl.DataFrame | None: ...
+
+    @overload
+    def first(self, *, as_models: Literal[True]) -> "M | None": ...
+
+    @overload
+    def first(self, *, as_models: bool) -> "pl.DataFrame | M | None": ...
+
+    def first(self, *, as_models: bool = False) -> "pl.DataFrame | M | None":
+        """Return the first row of the query, or `None` if there are none.
+
+        "First" is in the order the dataset stores the rows, which is not
+        guaranteed for Delta tables or for several files read together.
+
+        Args:
+            as_models: If true, return an instance of the model instead of a
+                one-row DataFrame.
+
+        Returns:
+            A one-row DataFrame, an instance when `as_models` is true, or
+            `None` when no row matches.
+
+        Raises:
+            ModelQueryError: If `as_models` is true and the query uses
+                `select()`.
+            ModelSchemaValidationError: If the data does not match the model.
+        """
+        self._check_models(as_models=as_models)
+        return self._one(self._frame(head=1), as_models=as_models)
+
+    @overload
+    def last(self, *, as_models: Literal[False] = False) -> pl.DataFrame | None: ...
+
+    @overload
+    def last(self, *, as_models: Literal[True]) -> "M | None": ...
+
+    @overload
+    def last(self, *, as_models: bool) -> "pl.DataFrame | M | None": ...
+
+    def last(self, *, as_models: bool = False) -> "pl.DataFrame | M | None":
+        """Return the last row of the query, or `None` if there are none.
+
+        Like :meth:`first`, in the order the dataset stores the rows. The whole
+        result is read to find the last row.
+
+        Args:
+            as_models: If true, return an instance of the model instead of a
+                one-row DataFrame.
+
+        Returns:
+            A one-row DataFrame, an instance when `as_models` is true, or
+            `None` when no row matches.
+
+        Raises:
+            ModelQueryError: If `as_models` is true and the query uses
+                `select()`.
+            ModelSchemaValidationError: If the data does not match the model.
+        """
+        self._check_models(as_models=as_models)
+        return self._one(self._frame().tail(1), as_models=as_models)
+
+    def count(self) -> int:
+        """Return the number of rows that match the query.
+
+        Only the schema is checked: the data is not validated (nulls in fields
+        that are not optional, values that cannot be cast). `select()` does not
+        change the count.
+
+        Returns:
+            The number of rows.
+        """
+        ctx = _context(self.model)
+        sql = self._sql
+        if sql is not None:
+            first_field = next(iter(ctx.spec.fields))
+            return ctx.entry.load_polars(where=sql, columns=[first_field]).height
+        plan = self._plan(ctx)[0]
+        return int(plan.select(pl.len()).collect().item())
 
     def _plan(self, ctx: _Context) -> tuple[pl.LazyFrame, pl.LazyFrame]:
         """Build the lazy plan and return it with the unfiltered scan."""
@@ -494,6 +648,40 @@ class ModelManager(Generic[M]):
     def where(self, sql: str | None = None, **lookups: Any) -> ModelQuery[M]:  # noqa: ANN401
         """Start a query with SQL and/or lookups. See :meth:`ModelQuery.where`."""
         return self._query().where(sql, **lookups)
+
+    def exclude(self, sql: str | None = None, **lookups: Any) -> ModelQuery[M]:  # noqa: ANN401
+        """Start a query dropping rows. See :meth:`ModelQuery.exclude`."""
+        return self._query().exclude(sql, **lookups)
+
+    @overload
+    def first(self, *, as_models: Literal[False] = False) -> pl.DataFrame | None: ...
+
+    @overload
+    def first(self, *, as_models: Literal[True]) -> M | None: ...
+
+    @overload
+    def first(self, *, as_models: bool) -> pl.DataFrame | M | None: ...
+
+    def first(self, *, as_models: bool = False) -> pl.DataFrame | M | None:
+        """Read the first row. See :meth:`ModelQuery.first`."""
+        return self._query().first(as_models=as_models)
+
+    @overload
+    def last(self, *, as_models: Literal[False] = False) -> pl.DataFrame | None: ...
+
+    @overload
+    def last(self, *, as_models: Literal[True]) -> M | None: ...
+
+    @overload
+    def last(self, *, as_models: bool) -> pl.DataFrame | M | None: ...
+
+    def last(self, *, as_models: bool = False) -> pl.DataFrame | M | None:
+        """Read the last row. See :meth:`ModelQuery.last`."""
+        return self._query().last(as_models=as_models)
+
+    def count(self) -> int:
+        """Count every row. See :meth:`ModelQuery.count`."""
+        return self._query().count()
 
     def select(self, *names: str) -> ModelQuery[M]:
         """Start a query on some fields. See :meth:`ModelQuery.select`."""
