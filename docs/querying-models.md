@@ -41,7 +41,8 @@ query returns.
 
 ## One query, whichever way you filter
 
-`filter()`, `where()` and `select()` return a **query**. It is immutable (each
+`filter()`, `where()`, `exclude()`, `order_by()` and `select()` return a
+**query**. It is immutable (each
 call returns a new one) and reads nothing until you run it:
 
 ```python
@@ -52,12 +53,15 @@ query.lazy()         # pl.LazyFrame
 query.all(as_models=True)   # list[Order], validated by Pydantic
 query.as_models()    # the same, as a shortcut
 query.select("id", "customer").all()   # only some fields
+query.order_by("-amount").first()   # the largest order (or None)
+query.count()        # number of rows
 ```
 
 !!! note "`filter` and `where` are alternatives"
     They run on different engines, so one query uses **only one of them**.
     Combining them, in either order, raises `ModelQueryError` where you write
-    it. `select()` goes with either.
+    it. `exclude()` belongs with `where()`. `order_by()` and `select()` go with
+    either.
 
 ## The methods
 
@@ -68,6 +72,11 @@ query.select("id", "customer").all()   # only some fields
 | `as_models()` | `list[Order]` | Shortcut for `all(as_models=True)`. Each row is validated by Pydantic, so field constraints apply. Cannot be combined with `select()`. |
 | `filter(*exprs)` | query | Polars expressions; several calls are combined with AND. |
 | `where(sql=None, **lookups)` | query | An SQL predicate (DuckDB) and/or Django-style lookups such as `id__gte=10`. Usable once per query. |
+| `exclude(sql=None, **lookups)` | query | The opposite of `where()`: drops the rows that match. Can be repeated and goes before or after `where()`. See [`exclude`](#exclude). |
+| `first(as_models=False)` | `pl.DataFrame \| Order \| None` | The first row, as a one-row DataFrame or an instance; `None` if there are none. See [First, last and count](#first-last-and-count). |
+| `last(as_models=False)` | `pl.DataFrame \| Order \| None` | The last row, like `first()`. |
+| `count()` | `int` | How many rows match. |
+| `order_by(*fields)` | query | Sorts by one or more fields; `"-field"` is descending. See [`order_by`](#order_by). |
 | `select(*fields)` | query | Only some fields; names must be fields of the model. |
 | `create_table()` | `bool` | Creates the dataset empty, with the model's schema, if it does not exist. See [Creating the table](#creating-the-table). |
 
@@ -235,6 +244,99 @@ Order.objects.where(sql="country = 'FI' OR amount > 500", paid=True)   # [3]
 
 This is how you write what lookups do not cover (`OR`, `NOT`, functions) and
 still keep the simple conditions validated.
+
+## `exclude`
+
+`exclude()` is the opposite of `where()`: it takes the same arguments (an SQL
+predicate and/or lookups) and drops the rows that match.
+
+```python
+Order.objects.exclude(country="US")             # [1, 2, 4, 5]
+Order.objects.exclude("amount > 100")           # [2, 4, 6]
+Order.objects.exclude(country="US", paid=True)  # [1, 2, 4, 5]: only rows that are both
+Order.objects.where(amount__gt=50).exclude(status="new")   # [1, 3, 6]
+Order.objects.exclude(status="new").where(amount__gt=50)   # [1, 3, 6]: any order
+Order.objects.exclude(id=1).exclude(id=2)       # [3, 4, 5, 6]: can be repeated
+Order.objects.exclude(coupon="WELCOME")         # [1, 3, 5, 6]: a null coupon is kept
+```
+
+- Several conditions in one call drop only the rows that satisfy **all** of
+  them (`exclude(a=1, b=2)` drops `a=1 AND b=2`), as in Django.
+- It can be called several times, before or after `where()`: each call drops
+  its own rows. Unlike `where()`, it is not limited to one use.
+- A row whose condition is unknown because of a null is **kept**: in the last
+  line, orders 1, 3 and 5 have no coupon and stay.
+- It takes SQL and lookups only, like `where()`, so it cannot be combined with
+  `filter()` (`ModelQueryError`). Lookups are checked against the model, and the
+  error names `exclude()`:
+
+```text
+ModelQueryError: exclude(): 'custmer' is not a field of Order; did you mean 'customer'? (fields: ...)
+```
+
+## `order_by`
+
+`order_by()` sorts the rows. Write the fields in the order of importance; a
+leading minus means descending, as in Django.
+
+```python
+Order.objects.order_by("amount").all()["id"]            # [4, 2, 6, 1, 5, 3]
+Order.objects.order_by("-amount").all()["id"]           # [3, 5, 1, 6, 2, 4]
+Order.objects.order_by("country", "-amount").all()["id"]   # [1, 4, 2, 5, 3, 6]
+```
+
+It goes with every other method, before or after them:
+
+```python
+Order.objects.where(country__in=["ES", "US"]).order_by("-amount")   # [3, 1, 6, 4]
+Order.objects.filter(pl.col("paid")).order_by("-amount").lazy()     # [3, 1, 6, 4]
+Order.objects.select("customer").order_by("-amount").all()
+# customer: grace, alan, ada, grace, linus, ada  (amount is not selected, and sorts)
+```
+
+- **Nulls** go last in ascending order and first in descending order. With
+  `coupon` (orders 1, 3 and 5 have none): `order_by("coupon", "id")` gives
+  `[6, 2, 4, 1, 3, 5]` and `order_by("-coupon", "id")` gives `[1, 3, 5, 2, 4, 6]`.
+- Rows that tie keep the order the dataset stores them in.
+- The sort runs on the validated data, so in `coerce` mode a text column cast to
+  `int` sorts as numbers (2, 9, 10), not as text.
+- On a `where()`/`exclude()` query the sort runs in Polars after DuckDB filters,
+  so it is not pushed to the storage. With `filter()` it is part of the lazy plan.
+- It can be used once per query, with every field in the call. A name that is
+  not a field, a repeated field or a second call raises `ModelQueryError`:
+
+```text
+ModelQueryError: order_by(): ['amout'] are not fields of Order; did you mean 'amount'? (fields: [...])
+ModelQueryError: order_by(): a field is repeated
+ModelQueryError: order_by() was already used: put every field in one call
+```
+
+## First, last and count
+
+```python
+Order.objects.select("id", "customer", "amount").order_by("-amount").first()
+# shape: (1, 3), the row id=3, grace, 980.0
+Order.objects.order_by("-amount").first(as_models=True)   # Order(id=3, customer='grace', ...)
+Order.objects.order_by("-amount").last(as_models=True)    # Order(id=4, customer='ada', ...)
+Order.objects.where(paid=True).order_by("placed_at").last(as_models=True).id   # 6
+Order.objects.where(amount__gt=5000).first()              # None
+Order.objects.count()                                     # 6
+Order.objects.where(country="US").count()                 # 2
+Order.objects.exclude(country="US").count()               # 4
+```
+
+- `first()` and `last()` return `None` when no row matches. They return a
+  one-row DataFrame, or with `as_models=True` an instance (validated by
+  Pydantic), which cannot be combined with `select()`.
+- They follow [`order_by()`](#order_by). **Without it**, "first" and "last" are
+  the order in which the dataset stores the rows, which Delta tables and several
+  files read together do not guarantee: sort when the answer matters.
+- `last()` reads the whole result to find the last row. With SQL (`where()`,
+  `exclude()`) `first()` also reads it all, because DuckDB takes no limit.
+- `count()` checks the schema but does not validate the data (nulls in
+  required fields, values that cannot be cast), like `lazy()`. `select()` and
+  `order_by()` do not change it.
+- All of them are also available on `Order.objects`.
 
 ## The same rows, three ways
 

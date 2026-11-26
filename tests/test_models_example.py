@@ -92,7 +92,33 @@ def test_the_querying_models_page_prints_what_it_documents():
     assert "None is not allowed in the values; use status__isnull" in out
     assert "expects exactly 2 values, got 1" in out
     assert "where() was already used" in out
-    assert out.count("ModelQueryError") == 10
+    assert out.count("ModelQueryError") == 18
+    # exclude(): the opposite of where(), and null-safe
+    assert "country=US          : [1, 2, 4, 5]" in out
+    assert "sql                 : [2, 4, 6]" in out
+    assert "both conditions     : [1, 2, 4, 5]" in out
+    assert "after where()       : [1, 3, 6]" in out
+    assert "before where()      : [1, 3, 6]" in out
+    assert "chained             : [3, 4, 5, 6]" in out
+    assert "a null is kept      : [1, 3, 5, 6]" in out
+    # order_by(): descending with a minus, nulls last when ascending
+    assert "amount              : [4, 2, 6, 1, 5, 3]" in out
+    assert "-amount             : [3, 5, 1, 6, 2, 4]" in out
+    assert "country, -amount    : [1, 4, 2, 5, 3, 6]" in out
+    assert "nulls last (asc)    : [6, 2, 4, 1, 3, 5]" in out
+    assert "nulls first (desc)  : [1, 3, 5, 2, 4, 6]" in out
+    assert "with where()        : [3, 1, 6, 4]" in out
+    assert "with filter()       : [3, 1, 6, 4]" in out
+    assert "['grace', 'alan', 'ada', 'grace', 'linus', 'ada']" in out
+    # first(), last() and count()
+    assert "last paid order     : 6" in out
+    assert "no match            : None" in out
+    assert "count               : 6" in out
+    assert "count where         : 2" in out
+    assert "count exclude       : 4" in out
+    assert "exclude(): 'custmer' is not a field of Order" in out
+    assert "order_by(): ['amout'] are not fields of Order; did you mean 'amount'?" in out
+    assert "order_by() was already used" in out
 
 
 def test_the_querying_catalog_page_prints_what_it_documents():
