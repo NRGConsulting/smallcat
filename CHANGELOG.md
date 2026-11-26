@@ -3,6 +3,18 @@
 All notable changes to `smallcat-chonk` are listed here. The version is taken
 from the git tag (`vX.Y.Z`).
 
+## 0.6.7 - 2026-11-26
+
+### Fixed
+
+- Reading a Delta table with a `where` on a text column no longer fails with
+  `Function 'equal' has no kernel matching input types (string, string_view)`.
+  This happened when the table's Parquet files hold `string_view` columns (for
+  example, files written by Polars with a recent Arrow compatibility level) and
+  affected `Model.objects.where(...)` and `load_polars(where=...)`. When
+  pyarrow cannot evaluate the pushed-down filter, smallcat now reads the data
+  cast to the table schema and lets DuckDB filter it, without pushdown.
+
 ## 0.6.6 - 2026-11-25
 
 ### Added
